@@ -240,6 +240,38 @@ button.tx:active { background: var(--bg); }
 .rk { background: var(--surface); border-radius: 14px; padding: 18px; font-size: 20px; text-align: center; box-shadow: 0 0 0 1.5px var(--accent) inset; overflow-wrap: anywhere; user-select: all; -webkit-user-select: all; }
 .danger-card { box-shadow: 0 0 0 1.5px var(--danger) inset; }
 .danger-card label { font-size: 15px; }
+
+/* שלב 3ב */
+:root { --c5: #c2410c; --pos: #1f7a3a; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --c5: #fb923c; --pos: #6fd18c; } }
+:root[data-theme="dark"] { --c5: #fb923c; --pos: #6fd18c; }
+.pos { color: var(--pos); }
+.navrow { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.navbtn, .navcard {
+  border: 0; cursor: pointer; text-align: right; background: var(--surface); box-shadow: 0 0 0 1px var(--line) inset;
+  border-radius: 16px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; font: inherit; color: inherit;
+}
+.navbtn small, .navcard small { color: var(--muted); font-size: 13px; }
+.navcard { flex-direction: row; align-items: center; gap: 12px; width: 100%; }
+.navcard > span:nth-child(2) { flex: 1; display: flex; flex-direction: column; }
+button.summary { border: 0; cursor: pointer; text-align: right; font: inherit; color: inherit; width: 100%; }
+.money .mrow { display: flex; justify-content: space-between; gap: 12px; font-variant-numeric: tabular-nums; }
+.money .mrow small { color: var(--muted); font-size: 12px; }
+.money .mrow.minus b { color: var(--danger); }
+.money .mrow.total { border-top: 1px solid var(--line); padding-top: 8px; font-size: 18px; }
+.split.two { grid-template-columns: 1fr 1fr; }
+.pill.bank { background: color-mix(in srgb, var(--c2) 16%, transparent); color: var(--c2); }
+.tx-note { font-size: 13px; color: var(--ink); opacity: .75; font-style: italic; }
+.row.bill { width: 100%; border: 0; border-top: 1px solid var(--line); background: none; cursor: pointer; text-align: right; font: inherit; color: inherit; align-items: flex-start; }
+.group .row.bill:first-child { border-top: 0; }
+.bill-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.bill-main small { color: var(--muted); font-size: 13px; }
+.bill-amt { display: flex; flex-direction: column; align-items: flex-end; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.bill-amt small { color: var(--muted); font-size: 12px; }
+.field.small { width: 9em; flex: none; text-align: left; direction: ltr; }
+.danger-link { color: var(--danger) !important; }
+.catrow.static { cursor: default; }
+label.row-btn { cursor: pointer; display: flex; justify-content: space-between; width: 100%; }
 @media (prefers-reduced-motion: reduce) { .shake { animation: none; } * { transition: none !important; } }
 </style>
 </head>
@@ -254,7 +286,7 @@ button.tx:active { background: var(--bg); }
 /* ============================================================
    מעקב הוצאות — אפליקציית ווב אישית. כל הנתונים במכשיר בלבד, מוצפנים.
    ============================================================ */
-const APP_VERSION = "3.0.0";
+const APP_VERSION = "4.0.0";
 
 /* ========= אחסון (במכשיר בלבד) =========
    ראשי: IndexedDB. גיבוי: localStorage (אם IndexedDB חסום בדפדפן).
@@ -583,8 +615,11 @@ function renderWelcome() {
     <h1>ברוך הבא</h1>
     <p class="lead">לפני שמתחילים נגדיר קוד גישה בן 6 ספרות. כל הנתונים יישמרו במכשיר הזה בלבד, מוצפנים בקוד שלך. בלי הקוד אי אפשר לקרוא אותם.</p>
     <div style="flex:1"></div>
-    <button class="btn" id="start" type="button">יצירת קוד גישה</button>`, "center");
+    <button class="btn" id="start" type="button">יצירת קוד גישה</button>
+    <label class="btn link" for="restoreFile">יש לי קובץ גיבוי</label>
+    <input id="restoreFile" type="file" accept=".json,application/json" hidden>`, "center");
   document.getElementById("start").addEventListener("click", () => renderCreate());
+  document.getElementById("restoreFile").addEventListener("change", e => pickRestore(e.target, renderWelcome));
 }
 
 function renderCreate(message = "6 ספרות", error = false) {
@@ -778,61 +813,260 @@ function renderNewCode(raw, { afterSave, cancel, message = "", error = false }) 
 }
 
 /* ========= סיווג ========= */
-const CATS = [
+/* ========= קטגוריות (ניתנות לעריכה) ========= */
+const PALETTE = ["#8e5bd0", "#d0567a", "#3aa39a", "#b8860b", "#5a7bd6", "#c2410c"];
+const DEFAULT_CATS = [
   { id: "home_fixed", name: "דירה – חשבונות קבועים", short: "חשבונות קבועים", color: "var(--c1)",
     subs: [["rent", "שכר דירה"], ["arnona", "ארנונה"], ["water", "מים"], ["electricity", "חשמל"], ["vaad", "ועד בית"], ["internet", "אינטרנט"], ["water_bar", "בר מים"]] },
   { id: "home_var", name: "דירה – משתנות חודשיות", short: "משתנות חודשיות", color: "var(--c2)",
-    subs: [["groceries", "סופר וקניות"], ["food", "אוכל ומשלוחים"], ["pets", "חתולים"], ["home_other", "אחר לבית"]] },
+    subs: [["groceries", "סופר וקניות"], ["pets", "חתולים"], ["home_other", "אחר לבית"]] },
   { id: "home_once", name: "דירה – לא קבועות", short: "דירה לא קבועות", color: "var(--c3)",
     subs: [["furniture", "ריהוט"], ["housewares", "כלי בית ומוצרים"], ["home_misc", "אחר לדירה"]] },
-  { id: "other", name: "אחר", short: "אחר", color: "var(--c4)", subs: [["other", "אחר"]] }
+  { id: "food_out", name: "אוכל בחוץ", short: "אוכל בחוץ", color: "var(--c5)",
+    subs: [["delivery", "משלוחים ואפליקציות"], ["restaurants", "מסעדות, ברים ובתי קפה"]] },
+  { id: "other", name: "אחר", short: "אחר", color: "var(--c4)",
+    subs: [["other", "אחר"], ["bank_fees", "עמלות בנק"]] }
 ];
-const catTop = key => key ? CATS.find(c => c.id === key.split("/")[0]) : null;
+const cats = () => (data && data.cats) || DEFAULT_CATS;
+const catTop = key => key ? cats().find(c => c.id === key.split("/")[0]) || null : null;
+const subOf = key => { const c = catTop(key); return c ? c.subs.find(s => s[0] === key.split("/")[1]) || null : null; };
 function catLabel(key, long = false) {
-  const c = catTop(key); if (!c) return "ממתין לסיווג";
-  const sub = c.subs.find(s => s[0] === key.split("/")[1]);
-  if (c.id === "other") return "אחר";
-  return long ? `${c.short} · ${sub ? sub[1] : ""}` : (sub ? sub[1] : c.short);
+  const c = catTop(key), s = subOf(key);
+  if (!c || !s) return "ממתין לסיווג";
+  if (c.id === "other" && s[0] === "other") return "אחר";
+  return long ? `${c.short} · ${s[1]}` : s[1];
 }
-const ALL_SUBS = CATS.flatMap(c => c.subs.map(s => ({ key: `${c.id}/${s[0]}`, label: c.id === "other" ? "אחר" : `${c.short} · ${s[1]}` })));
+const allSubs = () => cats().flatMap(c => c.subs.map(s => ({ key: `${c.id}/${s[0]}`, label: catLabel(`${c.id}/${s[0]}`, true) })));
+const validKey = key => !!subOf(key);
+const newId = p => p + Math.random().toString(36).slice(2, 8);
+
+/* ========= חודשים (מחזורי חיוב) =========
+   "יולי" = מחזור שמחויב ב-10.8. תנועות בעו"ש משויכות לפי תאריך:
+   מ-3 ימים אחרי החיוב הקודם ועד 3 ימים אחרי החיוב הזה (כדי שחיוב כאל שיורד ב-11 ייכנס לחודש שלו). */
+const addDays = (iso, d) => { const t = new Date(iso + "T12:00:00"); t.setDate(t.getDate() + d); return t.toISOString().slice(0, 10); };
+const addMonths = (iso, m) => { const t = new Date(iso + "T12:00:00"); t.setMonth(t.getMonth() + m); return t.toISOString().slice(0, 10); };
+function cycleDates() { return [...new Set(data.statements.map(s => s.chargeDate))].sort(); }
+function cycleWindow(chargeDate) {
+  const all = cycleDates(), i = all.indexOf(chargeDate);
+  const prev = i > 0 ? all[i - 1] : addMonths(chargeDate, -1);
+  return { from: addDays(prev, 3), to: addDays(chargeDate, 3) };   // from < date <= to
+}
+function cycleOf(dateISO) {
+  for (const c of cycleDates()) { const w = cycleWindow(c); if (dateISO > w.from && dateISO <= w.to) return c; }
+  return null;
+}
+const txInCycle = chargeDate => data.tx.filter(t => t.source === "bank" ? cycleOf(t.date) === chargeDate
+  : (data.statements.find(s => s.id === t.statementId) || {}).chargeDate === chargeDate);
+
+/* כמה "הוצאה" יש בתנועה (חיובי). חיובי כאל בבנק, משכורת וניירות ערך = 0 */
+function spent(t) {
+  if (t.source === "bank") return t.kind === "expense" ? t.charge : 0;
+  return (t.pending || t.charge == null) ? 0 : t.charge;
+}
+
+/* ========= דיסקונט: פענוח קובץ תנועות בעו"ש ========= */
+async function readTextFile(file) {
+  const buf = await file.arrayBuffer();
+  let text = new TextDecoder("utf-8").decode(buf);
+  if (text.includes("�")) { try { text = new TextDecoder("windows-1255").decode(buf); } catch {} }
+  return text.replace(/^﻿/, "");
+}
+function parseDelimited(text) {
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  const delim = lines.some(l => l.includes("\t")) ? "\t" : ",";
+  return lines.map(line => {
+    if (delim === "\t") return line.split("\t");
+    const out = []; let cur = "", q = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (q) { if (ch === '"' && line[i + 1] === '"') { cur += '"'; i++; } else if (ch === '"') q = false; else cur += ch; }
+      else if (ch === '"') q = true; else if (ch === ",") { out.push(cur); cur = ""; } else cur += ch;
+    }
+    out.push(cur); return out;
+  });
+}
+function toISODate(v) {
+  if (typeof v === "number") return serialToISO(v);
+  const m = String(v || "").trim().match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})$/);
+  if (!m) return null;
+  const y = m[3].length === 2 ? "20" + m[3] : m[3];
+  return `${y}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+}
+const cleanBankDesc = d => String(d || "").replace(/\s+/g, " ").trim()
+  .replace(/(שיק|צ'?ק)\s*:\s*\d+/g, "$1")          // מספר צ'ק לא נשמר
+  .replace(/\d[\d\-\/ ]{5,}\d/g, "•••");             // רצפי ספרות ארוכים (מספרי חשבון וכו') לא נשמרים
+function bankKind(desc, signed) {
+  if (/כ\.?\s?א\.?\s?ל|כאל|ישראכרט|מקס איט|לאומי קארד|אמריקן אקספרס|דיינרס/.test(desc)) return "card_payment";
+  if (/ני"?ע|ניירות ערך|מניירות/.test(desc)) return "investment";
+  return signed > 0 ? "income" : "expense";
+}
+function parseDiscount(rows) {
+  const str = x => String(x == null ? "" : x).replace(/\s+/g, " ").trim();
+  let h = -1;
+  for (let i = 0; i < Math.min(rows.length, 40); i++) {
+    const r = (rows[i] || []).map(str);
+    if (r.some(c => c.includes("תיאור")) && r.some(c => c.startsWith("יתרה"))) { h = i; break; }
+  }
+  if (h < 0) throw new Error("not-bank");
+  const H = rows[h].map(str);
+  const col = re => H.findIndex(c => re.test(c));
+  const ci = { date: col(/^תאריך$/), value: col(/יום ערך|תאריך ערך/), desc: col(/תיאור/), amt: col(/זכות|חובה|סכום/), bal: col(/^יתרה/) };
+  if (ci.date < 0 || ci.desc < 0 || ci.amt < 0) throw new Error("not-bank");
+  const tx = [];
+  rows.slice(h + 1).forEach((r, idx) => {
+    if (!r) return;
+    const date = toISODate(r[ci.date]);
+    const signed = typeof r[ci.amt] === "number" ? r[ci.amt] : parseNum(r[ci.amt]);
+    if (!date || !isFinite(signed) || String(r[ci.amt]).trim() === "") return;
+    const desc = cleanBankDesc(r[ci.desc]);
+    const balance = ci.bal >= 0 ? (typeof r[ci.bal] === "number" ? r[ci.bal] : parseNum(r[ci.bal])) : null;
+    tx.push({ date, valueDate: ci.value >= 0 ? toISODate(r[ci.value]) : null, desc, signed: round2(signed),
+      balance: isFinite(balance) ? round2(balance) : null, order: idx });
+  });
+  if (!tx.length) throw new Error("empty");
+  const latest = [...tx].sort((a, b) => b.date.localeCompare(a.date) || a.order - b.order)[0];
+  return { tx, from: tx.reduce((a, t) => t.date < a ? t.date : a, tx[0].date), to: latest.date,
+    latestBalance: latest.balance, latestDate: latest.date };
+}
+const bankFp = t => [t.date, t.desc, t.signed, t.balance].join("|");
+
+/* ========= חשבונות קבועים ========= */
+const FREQ = [[1, "כל חודש"], [2, "כל חודשיים"], [3, "כל 3 חודשים"], [6, "כל חצי שנה"], [12, "פעם בשנה"]];
+const DEFAULT_FREQ = { rent: 1, arnona: 2, water: 2, electricity: 2, vaad: 3, internet: 1, water_bar: 1 };
+const billCfg = sub => Object.assign({ freq: DEFAULT_FREQ[sub] || 1, manual: null }, (data.bills || {})[sub] || {});
+/* מתי הכסף שולם בפועל: בעסקה בתשלומים — מועד החיוב, לא תאריך הקנייה */
+function payDate(t) {
+  if (t.source !== "bank" && t.installment) { const st = data.statements.find(s => s.id === t.statementId); if (st) return st.chargeDate; }
+  return t.date;
+}
+function billInfo(sub) {
+  const key = `home_fixed/${sub}`, cfg = billCfg(sub);
+  const pays = data.tx.filter(t => t.category === key && spent(t) > 0).sort((a, b) => payDate(a).localeCompare(payDate(b)));
+  const last = pays[pays.length - 1] || null;
+  const perPayment = cfg.manual != null ? cfg.manual : (last ? spent(last) : null);
+  return { key, cfg, pays, last, perPayment, monthly: perPayment != null ? perPayment / cfg.freq : null,
+    nextDue: last ? addMonths(payDate(last), cfg.freq) : null };
+}
+
+/* ========= תשלומים ========= */
+function installmentPlans() {
+  const groups = new Map();
+  for (const t of data.tx) {
+    if (t.source === "bank" || !t.installment || t.installment.of < 2) continue;
+    if (catTop(t.category) && catTop(t.category).id === "home_fixed") continue;   // בר מים וכו' = חשבון קבוע
+    const k = [t.merchant, t.date, t.amount, t.installment.of].join("|");
+    const st = data.statements.find(s => s.id === t.statementId);
+    const g = groups.get(k) || { merchant: t.merchant, date: t.date, amount: t.amount, of: t.installment.of, seen: [], category: t.category };
+    g.seen.push({ n: t.installment.n, charge: t.charge, chargeDate: st ? st.chargeDate : null, tx: t });
+    if (t.catSource === "user" || !g.category) g.category = t.category;
+    groups.set(k, g);
+  }
+  const lastCycle = cycleDates().slice(-1)[0];
+  const cancelled = new Set(data.tx.filter(t => t.source !== "bank" && /ביטול/.test(t.typeRaw || "")).map(t => t.merchant));
+  return [...groups.values()].map(g => {
+    g.seen.sort((a, b) => a.n - b.n);
+    const latest = g.seen[g.seen.length - 1];
+    const monthly = latest.charge != null && latest.charge > 0 ? latest.charge : g.amount / g.of;
+    const remaining = Math.max(0, g.of - latest.n);
+    const paidSum = g.seen.reduce((a, s) => a + (s.charge || 0), 0);
+    const endCharge = latest.chargeDate ? addMonths(latest.chargeDate, remaining) : null;
+    const isCancelled = cancelled.has(g.merchant);
+    return { ...g, latest, monthly, remaining, paidN: latest.n, paidSum, cancelled: isCancelled,
+      remainingAmount: isCancelled ? 0 : Math.max(0, round2(g.amount - paidSum)), endCharge, active: remaining > 0 && !isCancelled,
+      stale: remaining > 0 && !isCancelled && latest.chargeDate !== lastCycle };
+  }).sort((a, b) => (b.active - a.active) || b.date.localeCompare(a.date));
+}
+
+/* ========= מצב כספי ========= */
+const fin = () => Object.assign({ portfolio: null, earmarks: [] }, data.finance || {});
+function moneyPicture() {
+  const acc = (data.accounts || [])[0];
+  const f = fin();
+  const bank = acc && acc.latestBalance != null ? acc.latestBalance : null;
+  const portfolio = f.portfolio ? f.portfolio.amount : null;
+  const owed = f.earmarks.reduce((a, e) => a + (Number(e.amount) || 0), 0);
+  const total = (bank || 0) + (portfolio || 0);
+  return { acc, bank, bankDate: acc ? acc.latestDate : null, portfolio, portfolioDate: f.portfolio ? f.portfolio.asOf : null,
+    earmarks: f.earmarks, owed, total, mine: total - owed };
+}
+
+/* ========= גיבוי מוצפן ========= */
+async function exportBackup() {
+  const payload = { app: "finance-tracker", kind: "encrypted-backup", version: APP_VERSION, createdAt: new Date().toISOString(),
+    vault: await kvGet("vault"), settings: await kvGet("settings"), data: await kvGet("data") };
+  const text = lsEncode(payload);
+  const name = `גיבוי-מעקב-הוצאות-${todayISO()}.json`;
+  const file = new File([text], name, { type: "application/json" });
+  if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: "גיבוי מעקב הוצאות" }); return "shared"; }
+    catch (e) { if (e && e.name === "AbortError") return "cancel"; }
+  }
+  const url = URL.createObjectURL(file);
+  const a = document.createElement("a"); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  return "downloaded";
+}
+async function readBackup(file) {
+  const obj = lsDecode(await file.text());
+  if (!obj || obj.app !== "finance-tracker" || !obj.vault || !obj.data) throw new Error("bad-backup");
+  return obj;
+}
+async function restoreBackup(obj) {
+  await kvClear();
+  await kvSet("vault", obj.vault);
+  if (obj.settings) await kvSet("settings", obj.settings);
+  await kvSet("data", obj.data);
+  await setGuard({ failed: 0, lockedUntil: 0 });
+}
 
 /* ענף של כאל ← קטגוריה. ריק = ממתין לסיווג */
 const DEFAULT_SECTOR = {
   "מזון ומשקאות": "home_var/groceries",
   "ריהוט ובית": "home_once/furniture",
-  "מסעדות": "other/other", "מזון מהיר": "other/other",
+  "מסעדות": "food_out/restaurants", "מזון מהיר": "food_out/restaurants", "אירועים": "food_out/restaurants",
+  "טיפוח ויופי": "other/other", "ציוד ומשרד": "other/other", "מלונאות ואירוח": "other/other",
   "אנרגיה": "other/other", "ביטוח ופיננסים": "other/other", "תקשורת ומחשבים": "other/other",
   "רפואה ובריאות": "other/other", "אופנה": "other/other", "פנאי בילוי": "other/other",
-  "אירועים": "other/other", "ילדים": "other/other", "רכב ותחבורה": "other/other", "תעשיה ומכירות": "other/other",
+  "ילדים": "other/other", "רכב ותחבורה": "other/other", "תעשיה ומכירות": "other/other",
   "מוסדות": "", "שונות": ""
 };
 /* בתי עסק מוכרים. sure=false ← נכנס ל"ממתין לסיווג" עם הצעה */
 const BUILTIN = [
-  [/סופר ?פארם|super ?pharm|be ?פארם/i, "other/other", true],
+  [/סופר ?פארם|super ?pharm/i, "other/other", true],
   [/וטרינר|vet|חיות|פט שופ|pet/i, "home_var/pets", true],
-  [/עיריי?ת .*שוטף|ארנונה|ריבית גישור/, "home_fixed/arnona", true],
-  [/עין כרמים|תאגיד המים|מי כרמיאל/, "home_fixed/water", true],
+  [/ריבית/, "other/bank_fees", true],
+  [/עיריי?ת .*שוטף|ארנונה/, "home_fixed/arnona", true],
+  [/תאגיד המים|תאגיד מים|מים וביוב/, "home_fixed/water", true],
   [/חברת החשמל|חברת חשמל/, "home_fixed/electricity", true],
   [/מי עדן|tami ?4|תמי ?4|נביעות/i, "home_fixed/water_bar", true],
   [/גילת טלקום|בזק|hot net|הוט נט|פרטנר תקשורת|סלקום/i, "home_fixed/internet", false],
   [/ועד בית/, "home_fixed/vaad", true],
-  [/wolt|וולט|משלוח|משלוחה|תן ביס|10bis/i, "home_var/food", true],
+  [/wolt|וולט|משלוח|משלוחה|תן ביס|10bis/i, "food_out/delivery", true],
   [/מקס סטוק|max stock|זול סטוק|סטוק/i, "home_once/housewares", true],
   [/רמי לוי|שופרסל|טיב טעם|יוחננוף|ויקטורי|אושר עד|קשת טעמים|מכולת|מרקט|סופר/, "home_var/groceries", true],
   [/^bit$|^bit |העברה ב ?bit|paybox|pay box|פייבוקס/i, null, false],
 ];
 const normMerchant = s => String(s).toLowerCase().replace(/\*.*$/, "").replace(/[\d"'׳״\-–_.,()]+/g, " ").replace(/\s+/g, " ").trim();
-const isTransferLike = t => t.type === "cash" || /^bit\b|העברה ב ?bit|paybox/i.test(t.merchant);
+const isTransferLike = t => t.type === "cash" || /^bit\b|העברה|paybox|משיכת מזומן/i.test(t.merchant);
 
 function classify(t) {
   const key = normMerchant(t.merchant);
   const mr = data.rules.merchant[key];
-  if (mr !== undefined) return { cat: mr || null, sure: !!mr };
+  if (mr !== undefined && (mr === "" || validKey(mr))) return { cat: mr || null, sure: !!mr };
+  if (t.source === "bank") {
+    if (t.kind !== "expense") return { cat: null, sure: true };
+    if (/עמל|מס במקור|דמי ניהול/.test(t.merchant)) return { cat: "other/bank_fees", sure: true };
+    if (/משיכת (שיק|צ'ק)/.test(t.merchant)) {
+      const rent = billCfg("rent").manual;
+      return { cat: "home_fixed/rent", sure: rent != null && Math.abs(t.charge - rent) < 0.01 };
+    }
+    return { cat: null, sure: false };
+  }
   if (t.type === "cash") return { cat: null, sure: false };
   for (const [re, cat, sure] of BUILTIN) if (re.test(t.merchant)) return { cat, sure: sure && !!cat };
   const sector = t.branch || "";
   const sm = sector in data.rules.sector ? data.rules.sector[sector] : DEFAULT_SECTOR[sector];
-  if (sm) return { cat: sm, sure: true };
+  if (sm && validKey(sm)) return { cat: sm, sure: true };
   return { cat: null, sure: false };
 }
 function reclassifyAll() {
@@ -842,7 +1076,8 @@ function reclassifyAll() {
     t.category = r.cat; t.catSource = r.cat ? "auto" : null; t.needsReview = !r.sure;
   }
 }
-const reviewQueue = () => data.tx.filter(t => !t.pending && (t.needsReview || !t.category));
+const inQueue = t => !t.pending && !(t.source === "bank" && t.kind !== "expense") && (t.needsReview || !t.category || !validKey(t.category));
+const reviewQueue = () => data.tx.filter(inQueue);
 
 /* ========= בית ========= */
 const ICON_LOCK = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>`;
@@ -872,216 +1107,6 @@ function autoLockLabel() {
   return o.s === 0 ? "מיידית" : `אחרי ${o.label}`;
 }
 const statementsSorted = () => [...data.statements].sort((a, b) => b.chargeDate.localeCompare(a.chargeDate));
-const spent = t => (t.pending || t.charge == null) ? 0 : t.charge;   // כולל חיוב מיידי, בלי עסקאות בקליטה
-
-function renderHome() {
-  returnTo = () => renderHome();
-  const sts = statementsSorted();
-  if (!sts.find(s => s.id === selectedStatementId)) selectedStatementId = sts[0] ? sts[0].id : null;
-  const st = sts.find(s => s.id === selectedStatementId);
-  const queue = reviewQueue().length;
-
-  screen(`
-    <div class="topbar">
-      <h1>סקירה</h1>
-      <div class="actions">
-        <button class="icon-btn" id="openImport" type="button" aria-label="ייבוא קובץ">${ICON_PLUS}</button>
-        <button class="icon-btn" id="lockNow" type="button" aria-label="נעילה עכשיו">${ICON_LOCK}</button>
-        <button class="icon-btn" id="openSettings" type="button" aria-label="הגדרות">${ICON_GEAR}</button>
-      </div>
-    </div>
-    ${queue ? `<button class="review-bar" id="openReview" type="button"><span class="count">${queue}</span><span>עסקאות ממתינות לסיווג</span><span aria-hidden="true">‹</span></button>` : ""}
-    ${st ? homeWithData(sts, st) : homeEmpty()}`);
-
-  document.getElementById("lockNow").addEventListener("click", lock);
-  document.getElementById("openSettings").addEventListener("click", renderSettings);
-  document.getElementById("openImport").addEventListener("click", renderImport);
-  const rv = document.getElementById("openReview"); if (rv) rv.addEventListener("click", renderReview);
-  const emptyBtn = document.getElementById("emptyImport"); if (emptyBtn) emptyBtn.addEventListener("click", renderImport);
-  document.querySelectorAll("[data-st]").forEach(b => b.addEventListener("click", () => { selectedStatementId = b.dataset.st; renderHome(); }));
-  document.querySelectorAll("[data-filter]").forEach(b => b.addEventListener("click", () => { txFilter = txFilter === b.dataset.filter && b.dataset.filter.startsWith("cat:") ? "all" : b.dataset.filter; renderHome(); }));
-  document.querySelectorAll("[data-tx]").forEach(b => b.addEventListener("click", () => renderCategorize(b.dataset.tx)));
-  const sel = document.querySelector(".cycles [aria-pressed='true']");
-  if (sel) sel.scrollIntoView({ block: "nearest", inline: "center" });
-}
-
-function homeEmpty() {
-  return `
-    <div class="stack">
-      <article class="card">
-        <div class="chip ok" aria-hidden="true">✓</div>
-        <div><h3>האפליקציה מאובטחת</h3>
-        <p>קוד גישה פעיל · נעילה אוטומטית ${esc(autoLockLabel())} · הנתונים מוצפנים במכשיר</p></div>
-      </article>
-      <article class="card col">
-        <h3>עוד אין נתונים</h3>
-        <p>באפליקציית כאל בחר "ייצוא לאקסל" לכל חודש, ואז ייבא את הקבצים לכאן. אפשר לבחור כמה קבצים בבת אחת. הקבצים נקראים במכשיר ולא נשלחים לשום מקום.</p>
-        <button class="btn" id="emptyImport" type="button">ייבוא קובצי כאל</button>
-      </article>
-    </div>`;
-}
-
-function homeWithData(sts, st) {
-  const card = data.cards.find(c => c.id === st.cardId);
-  const tx = data.tx.filter(t => t.statementId === st.id);
-  const open = isOpen(st);
-
-  const byCat = CATS.map(c => ({ c, sum: tx.filter(t => catTop(t.category) === c).reduce((a, t) => a + spent(t), 0) }));
-  const unc = tx.filter(t => !t.category).reduce((a, t) => a + spent(t), 0);
-  const maxSum = Math.max(1, ...byCat.map(x => x.sum), unc);
-  const totalSpent = tx.reduce((a, t) => a + spent(t), 0);
-
-  const filters = [["all", "הכול"], ["installments", "תשלומים"], ["standing", "הוראות קבע"], ["review", "לבדיקה"], ["special", "מיוחדות"]];
-  const activeCat = txFilter.startsWith("cat:") ? txFilter.slice(4) : null;
-  const shown = tx.filter(t =>
-    txFilter === "all" ? true :
-    activeCat ? (activeCat === "none" ? !t.category : catTop(t.category) && catTop(t.category).id === activeCat) :
-    txFilter === "installments" ? !!t.installment :
-    txFilter === "standing" ? t.type === "standing" :
-    txFilter === "review" ? (!t.pending && (t.needsReview || !t.category)) :
-    (t.immediate || t.pending || t.type === "refund" || t.type === "credit" || t.currency !== "ILS"));
-  const groups = {};
-  shown.forEach(t => (groups[t.date] = groups[t.date] || []).push(t));
-  const days = Object.keys(groups).sort().reverse();
-
-  const catRow = (id, label, color, sum) => `
-    <button class="catrow" type="button" data-filter="cat:${id}" aria-pressed="${activeCat === id}">
-      <span class="catname"><i style="background:${color}"></i>${esc(label)}</span>
-      <span class="bar"><span style="width:${(sum / maxSum * 100).toFixed(1)}%;background:${color}"></span></span>
-      <b>${fmtMoney(sum)}</b>
-    </button>`;
-
-  return `
-    <div class="cycles" role="group" aria-label="בחירת חודש">
-      ${sts.map(s => `
-        <button type="button" data-st="${s.id}" aria-pressed="${s.id === st.id}">
-          <span>${esc(cycleLabel(s.chargeDate))}</span>
-          <small>${isOpen(s) ? "פתוח" : "חיוב " + ddmm(s.chargeDate)}</small>
-        </button>`).join("")}
-    </div>
-
-    <article class="summary">
-      <div class="summary-head">
-        <span class="badge-cal">כאל</span>
-        <span class="card-name">${esc(card ? card.nickname : "כרטיס")}</span>
-        ${open ? `<span class="pill warn">מחזור פתוח</span>` : ""}
-      </div>
-      <div class="big">${fmtMoney(st.total)}</div>
-      <div class="sub">${open ? "עד עכשיו, לחיוב ב-" : "חויב ב-"}${ddmm(st.chargeDate)} · ${tx.filter(t => !t.immediate).length} עסקאות
-        ${st.verified ? `<span class="pill ok">תואם לקובץ ✓</span>` : `<span class="pill warn">לא תואם לסכום בקובץ</span>`}</div>
-      ${st.immediateTotal ? `<div class="note">בנוסף, חיוב מיידי (לא ב-10 לחודש): <b>${fmtMoney(st.immediateTotal)}</b></div>` : ""}
-      ${st.pendingTotal ? `<div class="note">בקליטה, עוד לא בסכום: <b>${fmtMoney(st.pendingTotal)}</b></div>` : ""}
-    </article>
-
-    <article class="summary">
-      <div class="summary-head"><h3>לפי קטגוריה</h3><span class="note">סה״כ ${fmtMoney(totalSpent)}</span></div>
-      <div class="cats">
-        ${byCat.map(x => catRow(x.c.id, x.c.short, x.c.color, x.sum)).join("")}
-        ${unc ? catRow("none", "ממתין לסיווג", "var(--muted)", unc) : ""}
-      </div>
-      ${activeCat ? `<div class="note">מסונן לפי קטגוריה. לחץ שוב לביטול.</div>` : ""}
-    </article>
-
-    <div class="filters" role="group" aria-label="סינון עסקאות">
-      ${filters.map(([k, l]) => `<button type="button" data-filter="${k}" aria-pressed="${k === txFilter}">${l}</button>`).join("")}
-    </div>
-
-    <div class="txlist">
-      ${days.length ? days.map(d => `
-        <div class="day">${new Date(d + "T12:00:00").toLocaleDateString("he-IL", { weekday: "long", day: "numeric", month: "numeric" })}</div>
-        <div class="group">${groups[d].map(txRow).join("")}</div>`).join("")
-        : `<p class="footnote">אין עסקאות בסינון הזה.</p>`}
-    </div>`;
-}
-
-function txRow(t) {
-  const chips = [];
-  if (t.installment) chips.push(`<span class="pill">${t.installment.n === 0 ? "קרדיט" : "תשלום " + t.installment.n + "/" + t.installment.of}</span>`);
-  if (t.type === "standing") chips.push(`<span class="pill">הוראת קבע</span>`);
-  if (t.immediate) chips.push(`<span class="pill warn">חיוב מיידי</span>`);
-  if (t.pending) chips.push(`<span class="pill warn">בקליטה</span>`);
-  if (t.type === "refund") chips.push(`<span class="pill ok">זיכוי</span>`);
-  if (t.type === "cash") chips.push(`<span class="pill">מזומן</span>`);
-  const c = catTop(t.category);
-  const catChip = !t.category ? `<span class="pill warn">ממתין לסיווג</span>`
-    : `<span class="catchip"><i style="background:${c.color}"></i>${esc(catLabel(t.category))}${t.needsReview ? " ?" : ""}</span>`;
-
-  let main, sub = "";
-  if (t.pending || t.charge == null) {
-    main = `<span class="muted">${fmtMoney(t.amount, t.currency)}</span>`;
-    sub = t.pending ? "" : "יחויב בהמשך";
-  } else {
-    main = fmtMoney(t.charge);
-    if (t.currency !== "ILS") sub = `במקור ${fmtMoney(t.amount, t.currency)}`;
-    else if (t.installment && t.installment.n > 0 && Math.abs(t.amount - t.charge) > 0.009) sub = `מתוך ${fmtMoney(t.amount)}`;
-  }
-  return `
-    <button class="tx" type="button" data-tx="${t.id}">
-      <span class="tx-main">
-        <span class="tx-name">${esc(t.merchant)}</span>
-        <span class="tx-sub">${catChip} ${chips.join(" ")}</span>
-      </span>
-      <span class="tx-amt">${main}${sub ? `<small>${sub}</small>` : ""}</span>
-    </button>`;
-}
-
-/* ========= סיווג עסקה ========= */
-function renderCategorize(txId, fromReview = false) {
-  const t = data.tx.find(x => x.id === txId); if (!t) return returnTo();
-  const key = normMerchant(t.merchant);
-  const sameCount = data.tx.filter(x => normMerchant(x.merchant) === key).length;
-  const suggestion = t.category;
-  screen(`
-    ${topbar("סיווג", "ביטול")}
-    <article class="card col">
-      <h3>${esc(t.merchant)}</h3>
-      <p>${new Date(t.date + "T12:00:00").toLocaleDateString("he-IL")} · ${t.charge != null ? fmtMoney(t.charge) : fmtMoney(t.amount, t.currency)}
-        ${t.branch ? " · ענף בכאל: " + esc(t.branch) : ""}${t.installment ? ` · תשלום ${t.installment.n}/${t.installment.of}` : ""}${t.type === "cash" ? " · משיכת מזומן" : ""}</p>
-      ${t.needsReview && suggestion ? `<p class="note">הצעה: <b>${esc(catLabel(suggestion, true))}</b>. אשר או בחר אחרת.</p>` : ""}
-    </article>
-    ${sameCount > 1 || !isTransferLike(t) ? `
-    <label class="check">
-      <input type="checkbox" id="applyAll" ${isTransferLike(t) ? "" : "checked"}>
-      <span>להחיל על כל העסקאות מ"${esc(t.merchant.replace(/\*.*$/, ""))}"${sameCount > 1 ? ` (${sameCount})` : ""}, גם בייבוא הבא</span>
-    </label>` : ""}
-    <div class="stack">
-      ${CATS.map(c => `
-        <div class="group">
-          <div class="row head"><span class="catname"><i style="background:${c.color}"></i>${esc(c.name)}</span></div>
-          <div class="subgrid">
-            ${c.subs.map(([sid, sl]) => {
-              const k = `${c.id}/${sid}`;
-              return `<button type="button" class="subbtn" data-cat="${k}" aria-pressed="${t.category === k}">${esc(sl)}</button>`;
-            }).join("")}
-          </div>
-        </div>`).join("")}
-    </div>`);
-  document.getElementById("back").addEventListener("click", () => fromReview ? renderReview() : returnTo());
-  document.querySelectorAll("[data-cat]").forEach(b => b.addEventListener("click", async () => {
-    const cat = b.dataset.cat;
-    const all = document.getElementById("applyAll");
-    if (all && all.checked) {
-      data.rules.merchant[key] = cat;
-      data.tx.filter(x => normMerchant(x.merchant) === key && x.catSource !== "user")
-        .forEach(x => { x.category = cat; x.catSource = "auto"; x.needsReview = false; });
-    }
-    t.category = cat; t.catSource = "user"; t.needsReview = false;
-    await saveData();
-    toast("סווג: " + catLabel(cat, true));
-    fromReview ? renderReview() : returnTo();
-  }));
-}
-
-function renderReview() {
-  returnTo = () => renderReview();
-  const q = reviewQueue().sort((a, b) => b.date.localeCompare(a.date));
-  screen(`
-    ${topbar("ממתין לסיווג")}
-    <p class="lead" style="max-width:none">${q.length ? "עסקאות שלא ברור לאן לשייך. לחץ על עסקה כדי לסווג. אם יש הצעה, היא מסומנת בסימן שאלה." : "הכול מסווג ✓"}</p>
-    ${q.length ? `<div class="group">${q.map(txRow).join("")}</div>` : ""}`);
-  document.getElementById("back").addEventListener("click", renderHome);
-  document.querySelectorAll("[data-tx]").forEach(b => b.addEventListener("click", () => renderCategorize(b.dataset.tx, true)));
-}
 
 /* ========= קריאת קובצי Excel — במכשיר, בלי ספריות חיצוניות ========= */
 async function unzip(buf) {
@@ -1225,13 +1250,27 @@ function parseCal(rows) {
 }
 
 /* ========= נתונים (מוצפנים) ========= */
-const emptyData = () => ({ v: 2, cards: [], statements: [], tx: [], rules: { merchant: {}, sector: {} } });
+const emptyData = () => ({ v: 3, cards: [], statements: [], tx: [], rules: { merchant: {}, sector: {} },
+  cats: JSON.parse(JSON.stringify(DEFAULT_CATS)), accounts: [], bills: {}, finance: { portfolio: null, earmarks: [] } });
 async function loadData() {
   const box = await kvGet("data");
   data = box ? await decryptJSON(box) : emptyData();
-  if (!data.rules) {                      // שדרוג מגרסה 2
-    data.rules = { merchant: {}, sector: {} };
-    data.v = 2;
+  if ((data.v || 1) < 3) {                        // שדרוג נתונים מגרסאות קודמות
+    data.rules = data.rules || { merchant: {}, sector: {} };
+    data.cats = data.cats || JSON.parse(JSON.stringify(DEFAULT_CATS));
+    data.accounts = data.accounts || []; data.bills = data.bills || {};
+    data.finance = data.finance || { portfolio: null, earmarks: [] };
+    const remap = k => k === "home_var/food" ? "food_out/delivery" : k;
+    data.tx.forEach(t => {
+      if (!t.source) t.source = "card";
+      if (t.note == null) t.note = "";
+      if (t.category) t.category = remap(t.category);
+      // סיווג מים שזוהה קודם אוטומטית נשמר ככלל, כדי שלא ילך לאיבוד
+      if (t.category === "home_fixed/water" && t.catSource === "auto") data.rules.merchant[normMerchant(t.merchant)] = "home_fixed/water";
+    });
+    for (const k in data.rules.merchant) data.rules.merchant[k] = remap(data.rules.merchant[k]);
+    for (const k in data.rules.sector) data.rules.sector[k] = remap(data.rules.sector[k]);
+    data.v = 3;
     reclassifyAll();
     await saveData();
   }
@@ -1239,20 +1278,282 @@ async function loadData() {
 async function saveData() { await kvSet("data", await encryptJSON(data)); }
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : b64(rand(12)));
 
-/* ========= מסך ייבוא ========= */
+/* ========= בית ========= */
+function renderHome() {
+  returnTo = () => renderHome();
+  const sts = statementsSorted();
+  if (!sts.find(s => s.id === selectedStatementId)) selectedStatementId = sts[0] ? sts[0].id : null;
+  const st = sts.find(s => s.id === selectedStatementId);
+  const queue = reviewQueue().length;
+
+  screen(`
+    <div class="topbar">
+      <h1>סקירה</h1>
+      <div class="actions">
+        <button class="icon-btn" id="openImport" type="button" aria-label="ייבוא קובץ">${ICON_PLUS}</button>
+        <button class="icon-btn" id="lockNow" type="button" aria-label="נעילה עכשיו">${ICON_LOCK}</button>
+        <button class="icon-btn" id="openSettings" type="button" aria-label="הגדרות">${ICON_GEAR}</button>
+      </div>
+    </div>
+    ${queue ? `<button class="review-bar" id="openReview" type="button"><span class="count">${queue}</span><span>עסקאות ממתינות לסיווג</span><span aria-hidden="true">‹</span></button>` : ""}
+    ${st ? homeWithData(sts, st) : homeEmpty()}`);
+
+  document.getElementById("lockNow").addEventListener("click", lock);
+  document.getElementById("openSettings").addEventListener("click", renderSettings);
+  document.getElementById("openImport").addEventListener("click", renderImport);
+  const on = (id, fn) => { const el = document.getElementById(id); if (el) el.addEventListener("click", fn); };
+  on("openReview", renderReview); on("emptyImport", renderImport);
+  on("openBills", renderBills); on("openInst", renderInstallments); on("openFinance", renderFinance);
+  document.querySelectorAll("[data-st]").forEach(b => b.addEventListener("click", () => { selectedStatementId = b.dataset.st; renderHome(); }));
+  document.querySelectorAll("[data-filter]").forEach(b => b.addEventListener("click", () => {
+    txFilter = txFilter === b.dataset.filter && b.dataset.filter.startsWith("cat:") ? "all" : b.dataset.filter; renderHome();
+  }));
+  document.querySelectorAll("[data-tx]").forEach(b => b.addEventListener("click", () => renderCategorize(b.dataset.tx)));
+  const sel = document.querySelector(".cycles [aria-pressed='true']");
+  if (sel) sel.scrollIntoView({ block: "nearest", inline: "center" });
+}
+
+function homeEmpty() {
+  return `
+    <div class="stack">
+      <article class="card">
+        <div class="chip ok" aria-hidden="true">✓</div>
+        <div><h3>האפליקציה מאובטחת</h3>
+        <p>קוד גישה פעיל · נעילה אוטומטית ${esc(autoLockLabel())} · הנתונים מוצפנים במכשיר</p></div>
+      </article>
+      <article class="card col">
+        <h3>עוד אין נתונים</h3>
+        <p>ייבא את קובצי האקסל של כאל (ייצוא לאקסל לכל חודש) ואת קובץ התנועות בעו"ש מדיסקונט. אפשר לבחור כמה קבצים בבת אחת. הקבצים נקראים במכשיר ולא נשלחים לשום מקום.</p>
+        <button class="btn" id="emptyImport" type="button">ייבוא קבצים</button>
+      </article>
+    </div>`;
+}
+
+function moneyCard() {
+  const m = moneyPicture();
+  if (m.bank == null && m.portfolio == null && !m.earmarks.length) {
+    return `<button class="card navcard" id="openFinance" type="button"><span class="chip" aria-hidden="true">₪</span>
+      <span><b>מצב כספי</b><small>ייבא את קובץ העו"ש והוסף חסכונות וכסף מיועד</small></span><span aria-hidden="true">‹</span></button>`;
+  }
+  return `
+    <button class="summary money" id="openFinance" type="button">
+      <span class="summary-head"><b>מצב כספי</b><span class="note">‹</span></span>
+      <span class="mrow"><span>עו"ש${m.bankDate ? ` <small>נכון ל-${ddmm(m.bankDate)}</small>` : ""}</span><b>${m.bank != null ? fmtMoney(m.bank) : "—"}</b></span>
+      ${m.portfolio != null ? `<span class="mrow"><span>תיק ני"ע${m.portfolioDate ? ` <small>עודכן ${ddmm(m.portfolioDate)}</small>` : ""}</span><b>${fmtMoney(m.portfolio)}</b></span>` : ""}
+      ${m.earmarks.map(e => `<span class="mrow minus"><span>${esc(e.name)} <small>לא שלי</small></span><b>−${fmtMoney(Number(e.amount) || 0)}</b></span>`).join("")}
+      <span class="mrow total"><span>שלי בפועל</span><b>${fmtMoney(m.mine)}</b></span>
+    </button>`;
+}
+
+function homeWithData(sts, st) {
+  const card = data.cards.find(c => c.id === st.cardId);
+  const tx = txInCycle(st.chargeDate);
+  const cardTx = tx.filter(t => t.source !== "bank");
+  const bankTx = tx.filter(t => t.source === "bank");
+  const open = isOpen(st);
+
+  const byCat = cats().map(c => ({ c, sum: tx.filter(t => catTop(t.category) === c).reduce((a, t) => a + spent(t), 0) }));
+  const unc = tx.filter(t => !t.category).reduce((a, t) => a + spent(t), 0);
+  const maxSum = Math.max(1, ...byCat.map(x => x.sum), unc);
+  const totalSpent = tx.reduce((a, t) => a + spent(t), 0);
+  const income = bankTx.filter(t => t.kind === "income").reduce((a, t) => a + t.signed, 0);
+  const outflow = bankTx.filter(t => t.signed < 0 && t.kind !== "investment").reduce((a, t) => a - t.signed, 0);
+
+  const filters = [["all", "הכול"], ["bank", "עו\"ש"], ["installments", "תשלומים"], ["standing", "הוראות קבע"], ["review", "לבדיקה"], ["special", "מיוחדות"]];
+  const activeCat = txFilter.startsWith("cat:") ? txFilter.slice(4) : null;
+  const shown = tx.filter(t =>
+    txFilter === "all" ? true :
+    activeCat ? (activeCat === "none" ? (!t.category && spent(t) > 0) : catTop(t.category) && catTop(t.category).id === activeCat) :
+    txFilter === "bank" ? t.source === "bank" :
+    txFilter === "installments" ? !!t.installment :
+    txFilter === "standing" ? t.type === "standing" :
+    txFilter === "review" ? inQueue(t) :
+    (t.immediate || t.pending || t.type === "refund" || t.type === "credit" || t.currency !== "ILS"));
+  const groups = {};
+  shown.forEach(t => (groups[t.date] = groups[t.date] || []).push(t));
+  const days = Object.keys(groups).sort().reverse();
+
+  const catRow = (id, label, color, sum) => `
+    <button class="catrow" type="button" data-filter="cat:${id}" aria-pressed="${activeCat === id}">
+      <span class="catname"><i style="background:${color}"></i>${esc(label)}</span>
+      <span class="bar"><span style="width:${(sum / maxSum * 100).toFixed(1)}%;background:${color}"></span></span>
+      <b>${fmtMoney(sum)}</b>
+    </button>`;
+
+  return `
+    ${moneyCard()}
+    <div class="navrow">
+      <button class="navbtn" id="openBills" type="button"><b>חשבונות קבועים</b><small>ממוצע חודשי ובפועל</small></button>
+      <button class="navbtn" id="openInst" type="button"><b>תשלומים</b><small>פעילים ועתידיים</small></button>
+    </div>
+
+    <div class="cycles" role="group" aria-label="בחירת חודש">
+      ${sts.map(s => `
+        <button type="button" data-st="${s.id}" aria-pressed="${s.id === st.id}">
+          <span>${esc(cycleLabel(s.chargeDate))}</span>
+          <small>${isOpen(s) ? "פתוח" : "חיוב " + ddmm(s.chargeDate)}</small>
+        </button>`).join("")}
+    </div>
+
+    <article class="summary">
+      <div class="summary-head">
+        <span class="badge-cal">כאל</span>
+        <span class="card-name">${esc(card ? card.nickname : "כרטיס")}</span>
+        ${open ? `<span class="pill warn">מחזור פתוח</span>` : ""}
+      </div>
+      <div class="big">${fmtMoney(st.total)}</div>
+      <div class="sub">${open ? "עד עכשיו, לחיוב ב-" : "חויב ב-"}${ddmm(st.chargeDate)} · ${cardTx.filter(t => !t.immediate).length} עסקאות
+        ${st.verified ? `<span class="pill ok">תואם לקובץ ✓</span>` : `<span class="pill warn">לא תואם לסכום בקובץ</span>`}</div>
+      ${st.immediateTotal ? `<div class="note">בנוסף, חיוב מיידי (לא ב-10 לחודש): <b>${fmtMoney(st.immediateTotal)}</b></div>` : ""}
+      ${st.pendingTotal ? `<div class="note">בקליטה, עוד לא בסכום: <b>${fmtMoney(st.pendingTotal)}</b></div>` : ""}
+      ${bankTx.length ? `<div class="split two">
+        <div><small>נכנס לעו"ש</small><b class="pos">${fmtMoney(income)}</b></div>
+        <div><small>יצא מהעו"ש</small><b>${fmtMoney(outflow)}</b></div></div>` : ""}
+    </article>
+
+    <article class="summary">
+      <div class="summary-head"><h3>הוצאות לפי קטגוריה</h3><span class="note">סה״כ ${fmtMoney(totalSpent)}</span></div>
+      <div class="cats">
+        ${byCat.filter(x => x.sum || x.c.id !== "food_out").map(x => catRow(x.c.id, x.c.short, x.c.color, x.sum)).join("")}
+        ${unc ? catRow("none", "ממתין לסיווג", "var(--muted)", unc) : ""}
+      </div>
+      <div class="note">כולל כרטיס ועו"ש. חיובי כאל בבנק לא נספרים פעמיים.${activeCat ? " מסונן לפי קטגוריה, לחץ שוב לביטול." : ""}</div>
+    </article>
+
+    <div class="filters" role="group" aria-label="סינון עסקאות">
+      ${filters.map(([k, l]) => `<button type="button" data-filter="${k}" aria-pressed="${k === txFilter}">${l}</button>`).join("")}
+    </div>
+
+    <div class="txlist">
+      ${days.length ? days.map(d => `
+        <div class="day">${new Date(d + "T12:00:00").toLocaleDateString("he-IL", { weekday: "long", day: "numeric", month: "numeric" })}</div>
+        <div class="group">${groups[d].map(txRow).join("")}</div>`).join("")
+        : `<p class="footnote">אין עסקאות בסינון הזה.</p>`}
+    </div>`;
+}
+
+function txRow(t) {
+  const chips = [];
+  if (t.source === "bank") chips.push(`<span class="pill bank">עו"ש</span>`);
+  if (t.installment) chips.push(`<span class="pill">${t.installment.n === 0 ? "קרדיט" : "תשלום " + t.installment.n + "/" + t.installment.of}</span>`);
+  if (t.type === "standing") chips.push(`<span class="pill">הוראת קבע</span>`);
+  if (t.immediate) chips.push(`<span class="pill warn">חיוב מיידי</span>`);
+  if (t.pending) chips.push(`<span class="pill warn">בקליטה</span>`);
+  if (t.type === "refund") chips.push(`<span class="pill ok">זיכוי</span>`);
+  if (t.type === "cash") chips.push(`<span class="pill">מזומן</span>`);
+
+  let catChip;
+  if (t.source === "bank" && t.kind !== "expense") {
+    catChip = `<span class="catchip">${t.kind === "card_payment" ? `חיוב כרטיס${t.matched ? " ✓" : ""}` : t.kind === "investment" ? "ניירות ערך" : /משכורת/.test(t.merchant) ? "משכורת" : "הכנסה"}</span>`;
+  } else {
+    const c = catTop(t.category);
+    catChip = !t.category ? `<span class="pill warn">ממתין לסיווג</span>`
+      : `<span class="catchip"><i style="background:${c.color}"></i>${esc(catLabel(t.category))}${t.needsReview ? " ?" : ""}</span>`;
+  }
+
+  let main, sub = "";
+  if (t.source === "bank") {
+    main = t.signed > 0 ? `<span class="pos">+${fmtMoney(t.signed)}</span>` : fmtMoney(-t.signed);
+  } else if (t.pending || t.charge == null) {
+    main = `<span class="muted">${fmtMoney(t.amount, t.currency)}</span>`;
+    sub = t.pending ? "" : "יחויב בהמשך";
+  } else {
+    main = fmtMoney(t.charge);
+    if (t.currency !== "ILS") sub = `במקור ${fmtMoney(t.amount, t.currency)}`;
+    else if (t.installment && t.installment.n > 0 && Math.abs(t.amount - t.charge) > 0.009) sub = `מתוך ${fmtMoney(t.amount)}`;
+  }
+  return `
+    <button class="tx" type="button" data-tx="${t.id}">
+      <span class="tx-main">
+        <span class="tx-name">${esc(t.merchant)}</span>
+        <span class="tx-sub">${catChip} ${chips.join(" ")}</span>
+        ${t.note ? `<span class="tx-note">${esc(t.note)}</span>` : ""}
+      </span>
+      <span class="tx-amt">${main}${sub ? `<small>${sub}</small>` : ""}</span>
+    </button>`;
+}
+
+/* ========= סיווג עסקה + הערה ========= */
+function renderCategorize(txId, fromReview = false) {
+  const t = data.tx.find(x => x.id === txId); if (!t) return returnTo();
+  const key = normMerchant(t.merchant);
+  const sameCount = data.tx.filter(x => normMerchant(x.merchant) === key).length;
+  const nonExpense = t.source === "bank" && t.kind !== "expense";
+  const amountText = t.source === "bank" ? (t.signed > 0 ? "+" + fmtMoney(t.signed) : fmtMoney(-t.signed))
+    : t.charge != null ? fmtMoney(t.charge) : fmtMoney(t.amount, t.currency);
+  screen(`
+    ${topbar(nonExpense ? "פרטי תנועה" : "סיווג", "חזרה")}
+    <article class="card col">
+      <h3>${esc(t.merchant)}</h3>
+      <p>${new Date(t.date + "T12:00:00").toLocaleDateString("he-IL")} · ${amountText}
+        ${t.source === "bank" ? " · עו\"ש" : ""}${t.branch ? " · ענף בכאל: " + esc(t.branch) : ""}${t.installment ? ` · תשלום ${t.installment.n}/${t.installment.of}` : ""}${t.type === "cash" ? " · משיכת מזומן" : ""}</p>
+      ${t.needsReview && t.category ? `<p class="note">הצעה: <b>${esc(catLabel(t.category, true))}</b>. אשר או בחר אחרת.</p>` : ""}
+      ${nonExpense ? `<p class="note">${t.kind === "card_payment" ? "חיוב של כרטיס האשראי. העסקאות עצמן כבר מופיעות מקובץ כאל, ולכן זה לא נספר כהוצאה." : t.kind === "investment" ? "תנועה בתיק ניירות הערך. לא נספרת כהוצאה או כהכנסה." : "הכנסה."}</p>` : ""}
+      <label for="note" class="note">הערה (למשל סיבת העברה בביט)</label>
+      <input class="field" id="note" type="text" maxlength="80" value="${esc(t.note || "")}" placeholder="אופציונלי">
+    </article>
+    ${nonExpense ? `<button class="btn" id="saveNote" type="button">שמירה</button>` : `
+    ${sameCount > 1 || !isTransferLike(t) ? `
+    <label class="check">
+      <input type="checkbox" id="applyAll" ${isTransferLike(t) ? "" : "checked"}>
+      <span>להחיל על כל העסקאות מ"${esc(t.merchant.replace(/\*.*$/, ""))}"${sameCount > 1 ? ` (${sameCount})` : ""}, גם בייבוא הבא</span>
+    </label>` : ""}
+    <div class="stack">
+      ${cats().map(c => `
+        <div class="group">
+          <div class="row head"><span class="catname"><i style="background:${c.color}"></i>${esc(c.name)}</span></div>
+          <div class="subgrid">
+            ${c.subs.map(([sid, sl]) => {
+              const k = `${c.id}/${sid}`;
+              return `<button type="button" class="subbtn" data-cat="${k}" aria-pressed="${t.category === k}">${esc(sl)}</button>`;
+            }).join("")}
+          </div>
+        </div>`).join("")}
+    </div>`}`);
+  const noteEl = document.getElementById("note");
+  const saveNote = async () => { const v = noteEl.value.trim(); if ((t.note || "") !== v) { t.note = v; await saveData(); } };
+  document.getElementById("back").addEventListener("click", async () => { await saveNote(); fromReview ? renderReview() : returnTo(); });
+  const sn = document.getElementById("saveNote");
+  if (sn) sn.addEventListener("click", async () => { await saveNote(); toast("נשמר"); fromReview ? renderReview() : returnTo(); });
+  document.querySelectorAll("[data-cat]").forEach(b => b.addEventListener("click", async () => {
+    const cat = b.dataset.cat;
+    const all = document.getElementById("applyAll");
+    if (all && all.checked) {
+      data.rules.merchant[key] = cat;
+      data.tx.filter(x => normMerchant(x.merchant) === key && x.catSource !== "user")
+        .forEach(x => { x.category = cat; x.catSource = "auto"; x.needsReview = false; });
+    }
+    t.category = cat; t.catSource = "user"; t.needsReview = false;
+    t.note = noteEl.value.trim();
+    await saveData();
+    toast("סווג: " + catLabel(cat, true));
+    fromReview ? renderReview() : returnTo();
+  }));
+}
+
+function renderReview() {
+  returnTo = () => renderReview();
+  const q = reviewQueue().sort((a, b) => b.date.localeCompare(a.date));
+  screen(`
+    ${topbar("ממתין לסיווג")}
+    <p class="lead" style="max-width:none">${q.length ? "עסקאות שלא ברור לאן לשייך. לחץ על עסקה כדי לסווג ולהוסיף הערה. הצעה מסומנת בסימן שאלה." : "הכול מסווג ✓"}</p>
+    ${q.length ? `<div class="group">${q.map(txRow).join("")}</div>` : ""}`);
+  document.getElementById("back").addEventListener("click", renderHome);
+  document.querySelectorAll("[data-tx]").forEach(b => b.addEventListener("click", () => renderCategorize(b.dataset.tx, true)));
+}
+
+/* ========= ייבוא: כאל + דיסקונט ========= */
 function renderImport() {
   let parsed = [];
   screen(`
-    ${topbar("ייבוא מכאל", "ביטול", "cancel")}
-    <p class="lead" style="max-width:none">באפליקציית כאל בחר "ייצוא לאקסל" לכל חודש. אפשר לבחור כמה קבצים יחד. הקבצים נקראים כאן במכשיר. מספר החשבון לא נשמר, ושום דבר לא נשלח החוצה.</p>
+    ${topbar("ייבוא קבצים", "ביטול", "cancel")}
+    <p class="lead" style="max-width:none">כאל: "ייצוא לאקסל" לכל חודש. דיסקונט: ייצוא תנועות בעו"ש. אפשר לבחור כמה קבצים יחד. הכול נקרא כאן במכשיר. מספרי חשבון וצ'קים לא נשמרים, ושום דבר לא נשלח החוצה.</p>
     <label class="btn secondary" for="file">בחירת קבצים</label>
-    <input id="file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" multiple hidden>
+    <input id="file" type="file" accept=".xlsx,.csv,.tsv,.txt,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" multiple hidden>
     <div id="preview" class="stack"></div>
     <button class="btn" id="save" type="button" hidden>שמירה</button>`);
   document.getElementById("cancel").addEventListener("click", renderHome);
-  const input = document.getElementById("file");
-  const preview = document.getElementById("preview");
-  const saveBtn = document.getElementById("save");
+  const input = document.getElementById("file"), preview = document.getElementById("preview"), saveBtn = document.getElementById("save");
 
   input.addEventListener("change", async () => {
     const files = [...input.files];
@@ -1261,25 +1562,34 @@ function renderImport() {
     preview.innerHTML = `<p class="footnote">קורא ${files.length} קבצים…</p>`;
     parsed = [];
     for (const f of files) {
-      try { parsed.push({ name: f.name, ok: true, res: parseCal(await readSheet(await f.arrayBuffer())) }); }
-      catch (e) {
+      try {
+        const isXlsx = /\.xlsx$/i.test(f.name) || (await f.slice(0, 2).text()) === "PK";
+        if (isXlsx) {
+          const rows = await readSheet(await f.arrayBuffer());
+          try { parsed.push({ name: f.name, ok: true, kind: "cal", res: parseCal(rows) }); }
+          catch { parsed.push({ name: f.name, ok: true, kind: "bank", res: parseDiscount(rows.map(r => (r || []).map(c => c ? c.v : null))) }); }
+        } else {
+          parsed.push({ name: f.name, ok: true, kind: "bank", res: parseDiscount(parseDelimited(await readTextFile(f))) });
+        }
+      } catch (e) {
         const msg = e.message === "no-decompress" ? "הדפדפן ישן מדי לקריאת קובצי אקסל. עדכן את iOS."
-          : e.message === "not-cal" ? "הקובץ לא נראה כמו ייצוא לאקסל של כאל." : "לא הצלחתי לקרוא את הקובץ.";
+          : (e.message === "not-cal" || e.message === "not-bank") ? "הקובץ לא נראה כמו ייצוא של כאל או של דיסקונט." : "לא הצלחתי לקרוא את הקובץ.";
         parsed.push({ name: f.name, ok: false, err: msg });
       }
     }
     const seen = new Map();
-    parsed.filter(p => p.ok).forEach(p => seen.set(p.res.last4 + p.res.chargeDate, p));
-    parsed = parsed.filter(p => !p.ok || seen.get(p.res.last4 + p.res.chargeDate) === p);
-    parsed.sort((a, b) => (b.ok ? b.res.chargeDate : "").localeCompare(a.ok ? a.res.chargeDate : ""));
+    parsed.filter(p => p.ok && p.kind === "cal").forEach(p => seen.set(p.res.last4 + p.res.chargeDate, p));
+    parsed = parsed.filter(p => !p.ok || p.kind !== "cal" || seen.get(p.res.last4 + p.res.chargeDate) === p);
+    parsed.sort((a, b) => (a.kind === "bank") - (b.kind === "bank") || ((b.ok && b.kind === "cal" ? b.res.chargeDate : "").localeCompare(a.ok && a.kind === "cal" ? a.res.chargeDate : "")));
     drawPreview();
   });
 
   function drawPreview() {
-    const newCards = [...new Set(parsed.filter(p => p.ok).map(p => p.res.last4))].filter(l4 => !data.cards.find(c => c.last4 === l4));
+    const existingFp = new Set(data.tx.filter(t => t.source === "bank").map(bankFp));
+    const newCards = [...new Set(parsed.filter(p => p.ok && p.kind === "cal").map(p => p.res.last4))].filter(l4 => !data.cards.find(c => c.last4 === l4));
     preview.innerHTML = `
       ${newCards.map(l4 => {
-        const prod = (parsed.find(p => p.ok && p.res.last4 === l4) || {}).res.product || "";
+        const prod = (parsed.find(p => p.ok && p.kind === "cal" && p.res.last4 === l4) || {}).res.product || "";
         return `
         <div class="card col">
           <h3>כרטיס חדש</h3>
@@ -1287,11 +1597,13 @@ function renderImport() {
           <input class="field" id="nick-${l4}" type="text" maxlength="30" value="הכרטיס שלי" aria-label="שם לכרטיס">
         </div>`;
       }).join("")}
-      ${parsed.map(p => p.ok ? `
+      ${parsed.map(p => !p.ok ? `
+        <div class="card"><div class="chip" aria-hidden="true">✕</div><div><h3>${esc(p.name)}</h3><p class="err">${esc(p.err)}</p></div></div>`
+      : p.kind === "cal" ? `
         <div class="card">
           <div class="chip ${p.res.verified ? "ok" : ""}" aria-hidden="true">${p.res.verified ? "✓" : "!"}</div>
           <div>
-            <h3>${esc(cycleLabel(p.res.chargeDate))} · חיוב ${ddmm(p.res.chargeDate)}</h3>
+            <h3>כאל · ${esc(cycleLabel(p.res.chargeDate))} · חיוב ${ddmm(p.res.chargeDate)}</h3>
             <p>${p.res.tx.length} עסקאות · ${fmtMoney(p.res.total)}
               ${p.res.verified ? " · תואם לסכום בקובץ" : ` · <span class="err">הסכום לא תואם (${fmtMoney(p.res.sumCharge)})</span>`}
               ${p.res.chargeDate > todayISO() ? " · מחזור פתוח" : ""}
@@ -1299,8 +1611,12 @@ function renderImport() {
           </div>
         </div>` : `
         <div class="card">
-          <div class="chip" aria-hidden="true">✕</div>
-          <div><h3>${esc(p.name)}</h3><p class="err">${esc(p.err)}</p></div>
+          <div class="chip ok" aria-hidden="true">✓</div>
+          <div>
+            <h3>דיסקונט · עו"ש</h3>
+            <p>${p.res.tx.length} תנועות (${p.res.tx.filter(t => !existingFp.has(bankFp(t))).length} חדשות) · ${ddmm(p.res.from)}–${ddmm(p.res.to)}
+              ${p.res.latestBalance != null ? ` · יתרה ${fmtMoney(p.res.latestBalance)}` : ""}</p>
+          </div>
         </div>`).join("")}`;
     saveBtn.hidden = !parsed.some(p => p.ok);
   }
@@ -1308,7 +1624,7 @@ function renderImport() {
   saveBtn.addEventListener("click", async () => {
     saveBtn.disabled = true; saveBtn.textContent = "מצפין ושומר…";
     let latest = null;
-    for (const p of parsed.filter(x => x.ok)) {
+    for (const p of parsed.filter(x => x.ok && x.kind === "cal")) {
       const r = p.res;
       let card = data.cards.find(c => c.last4 === r.last4);
       if (!card) {
@@ -1317,10 +1633,10 @@ function renderImport() {
         data.cards.push(card);
       }
       const old = data.statements.find(s => s.cardId === card.id && s.chargeDate === r.chargeDate);
-      const keepUser = new Map();   // סיווגים ידניים שורדים ייבוא חוזר של אותו מחזור
+      const keep = new Map();   // סיווגים ידניים והערות שורדים ייבוא חוזר של אותו מחזור
       if (old) {
-        data.tx.filter(t => t.statementId === old.id && t.catSource === "user")
-          .forEach(t => keepUser.set([t.date, t.merchant, t.amount, t.installment ? t.installment.n : ""].join("|"), t.category));
+        data.tx.filter(t => t.statementId === old.id && (t.catSource === "user" || t.note))
+          .forEach(t => keep.set([t.date, t.merchant, t.amount, t.installment ? t.installment.n : ""].join("|"), { category: t.category, catSource: t.catSource, note: t.note }));
         data.tx = data.tx.filter(t => t.statementId !== old.id);
         data.statements = data.statements.filter(s => s !== old);
       }
@@ -1328,17 +1644,37 @@ function renderImport() {
         immediateTotal: r.immediateTotal, pendingTotal: r.pendingTotal, verified: r.verified, importedAt: new Date().toISOString() };
       data.statements.push(stmt);
       r.tx.forEach(t => {
-        const nt = { ...t, id: uid(), statementId: stmt.id, cardId: card.id, category: null, catSource: null, needsReview: false };
+        const nt = { ...t, id: uid(), source: "card", statementId: stmt.id, cardId: card.id, category: null, catSource: null, needsReview: false, note: "" };
         const k = [t.date, t.merchant, t.amount, t.installment ? t.installment.n : ""].join("|");
-        if (keepUser.has(k)) { nt.category = keepUser.get(k); nt.catSource = "user"; }
-        else { const c = classify(nt); nt.category = c.cat; nt.catSource = c.cat ? "auto" : null; nt.needsReview = !c.sure; }
+        const kept = keep.get(k);
+        if (kept) { nt.note = kept.note || ""; if (kept.catSource === "user") { nt.category = kept.category; nt.catSource = "user"; } }
+        if (nt.catSource !== "user") { const c = classify(nt); nt.category = c.cat; nt.catSource = c.cat ? "auto" : null; nt.needsReview = !c.sure; }
         data.tx.push(nt);
       });
       if (!latest || stmt.chargeDate > latest.chargeDate) latest = stmt;
     }
+    for (const p of parsed.filter(x => x.ok && x.kind === "bank")) {
+      const r = p.res;
+      data.accounts = data.accounts || [];
+      let acc = data.accounts[0];
+      if (!acc) { acc = { id: uid(), bank: "discount", nickname: "עו\"ש ראשי", latestBalance: null, latestDate: null }; data.accounts.push(acc); }
+      const existing = new Set(data.tx.filter(t => t.source === "bank").map(bankFp));
+      r.tx.forEach(t => {
+        if (existing.has(bankFp(t))) return;
+        const kind = bankKind(t.desc, t.signed);
+        const nt = { id: uid(), source: "bank", accountId: acc.id, date: t.date, valueDate: t.valueDate, merchant: t.desc, desc: t.desc,
+          signed: t.signed, balance: t.balance, kind, charge: kind === "expense" ? -t.signed : t.signed, amount: Math.abs(t.signed),
+          currency: "ILS", type: kind, branch: "", installment: null, pending: false, immediate: false,
+          category: null, catSource: null, needsReview: false, note: "" };
+        const c = classify(nt); nt.category = c.cat; nt.catSource = c.cat ? "auto" : null; nt.needsReview = !c.sure;
+        data.tx.push(nt);
+      });
+      if (r.latestBalance != null && (!acc.latestDate || r.latestDate >= acc.latestDate)) { acc.latestBalance = r.latestBalance; acc.latestDate = r.latestDate; }
+    }
+    matchCardPayments();
     try {
       await saveData();
-      selectedStatementId = latest ? latest.id : null;
+      if (latest) selectedStatementId = latest.id;
       txFilter = "all";
       renderHome();
       const q = reviewQueue().length;
@@ -1347,6 +1683,259 @@ function renderImport() {
       saveBtn.disabled = false; saveBtn.textContent = "שמירה";
       toast("השמירה נכשלה. נסה שוב");
     }
+  });
+}
+
+/* חיוב כאל בבנק ← בודק שתואם לסכום של מחזור או לחיוב מיידי */
+function matchCardPayments() {
+  const amounts = [];
+  data.statements.forEach(s => { amounts.push(s.total); });
+  data.tx.filter(t => t.source !== "bank" && t.immediate && t.charge).forEach(t => amounts.push(t.charge));
+  data.tx.filter(t => t.source === "bank" && t.kind === "card_payment")
+    .forEach(t => { t.matched = amounts.some(a => Math.abs(a + t.signed) < 0.01); });
+}
+
+/* ========= חשבונות קבועים ========= */
+function renderBills() {
+  returnTo = () => renderBills();
+  const fixed = cats().find(c => c.id === "home_fixed");
+  const sts = statementsSorted();
+  const cur = sts.find(s => s.id === selectedStatementId) || sts[0];
+  const curTx = cur ? txInCycle(cur.chargeDate) : [];
+  const infos = fixed.subs.map(([sid, label]) => ({ sid, label, ...billInfo(sid),
+    actual: curTx.filter(t => t.category === `home_fixed/${sid}`).reduce((a, t) => a + spent(t), 0) }));
+  const avgTotal = infos.reduce((a, b) => a + (b.monthly || 0), 0);
+  const actualTotal = infos.reduce((a, b) => a + b.actual, 0);
+  screen(`
+    ${topbar("חשבונות קבועים")}
+    <article class="summary">
+      <div class="split two">
+        <div><small>ממוצע לחודש</small><b>${fmtMoney(avgTotal)}</b></div>
+        <div><small>בפועל ב${cur ? esc(cycleLabel(cur.chargeDate)) : "חודש"}</small><b>${fmtMoney(actualTotal)}</b></div>
+      </div>
+      <div class="note">ממוצע = התשלום האחרון חלקי התדירות (למשל 800 ₪ לחודשיים = 400 ₪ לחודש). אפשר לקבוע סכום ידני לכל חשבון.</div>
+    </article>
+    <div class="group">
+      ${infos.map(b => `
+        <button class="row bill" type="button" data-bill="${b.sid}">
+          <span class="bill-main">
+            <b>${esc(b.label)}</b>
+            <small>${FREQ.find(f => f[0] === b.cfg.freq)[1]}${b.cfg.manual != null ? " · סכום ידני" : ""}${b.last ? ` · אחרון ${ddmm(payDate(b.last))}: ${fmtMoney(spent(b.last))}` : b.cfg.manual == null ? " · עוד לא זוהה תשלום" : ""}</small>
+          </span>
+          <span class="bill-amt">
+            <b>${b.monthly != null ? fmtMoney(b.monthly) : "—"}</b>
+            <small>${b.actual ? `בפועל ${fmtMoney(b.actual)}` : "לחודש"}</small>
+          </span>
+        </button>`).join("")}
+    </div>
+    <p class="footnote">חשבון שלא מזוהה אוטומטית: מצא את העסקה ברשימה וסווג אותה לחשבון הנכון, או קבע סכום ידני (למשל ועד בית במזומן). להוספת חשבון חדש: הגדרות ← קטגוריות.</p>`);
+  document.getElementById("back").addEventListener("click", renderHome);
+  document.querySelectorAll("[data-bill]").forEach(b => b.addEventListener("click", () => renderBillEdit(b.dataset.bill)));
+}
+
+function renderBillEdit(sid) {
+  const info = billInfo(sid), s = subOf(`home_fixed/${sid}`);
+  screen(`
+    ${topbar(s ? s[1] : "חשבון")}
+    <div class="group">
+      <div class="row"><label for="freq">תדירות</label>
+        <select class="sel" id="freq">${FREQ.map(([v, l]) => `<option value="${v}" ${v === info.cfg.freq ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+      <div class="row"><label for="manual">סכום לתשלום (ידני)</label>
+        <input class="field small" id="manual" type="text" inputmode="decimal" placeholder="אוטומטי" value="${info.cfg.manual != null ? info.cfg.manual : ""}"></div>
+    </div>
+    <p class="footnote">השאר ריק כדי לחשב לפי התשלום האחרון שזוהה. מלא סכום אם החשבון משולם במזומן או כשהסכום קבוע.</p>
+    <button class="btn" id="saveBill" type="button">שמירה</button>
+    <div class="section-label">תשלומים שזוהו</div>
+    <div class="group">${info.pays.length ? [...info.pays].reverse().map(txRow).join("") : `<div class="row"><span class="val">אין עדיין</span></div>`}</div>`);
+  document.getElementById("back").addEventListener("click", renderBills);
+  document.querySelectorAll("[data-tx]").forEach(b => b.addEventListener("click", () => renderCategorize(b.dataset.tx)));
+  document.getElementById("saveBill").addEventListener("click", async () => {
+    const raw = document.getElementById("manual").value.trim();
+    const manual = raw === "" ? null : parseNum(raw);
+    if (manual != null && !(manual >= 0)) { toast("סכום לא תקין"); return; }
+    data.bills = data.bills || {};
+    data.bills[sid] = { freq: Number(document.getElementById("freq").value), manual };
+    reclassifyAll();
+    await saveData(); toast("נשמר"); renderBills();
+  });
+}
+
+/* ========= תשלומים ========= */
+function renderInstallments() {
+  returnTo = () => renderInstallments();
+  const plans = installmentPlans();
+  const active = plans.filter(p => p.active), done = plans.filter(p => !p.active);
+  const lastCycle = cycleDates().slice(-1)[0];
+  const ahead = [];
+  if (lastCycle) for (let k = 1; k <= 6; k++) {
+    const cd = addMonths(lastCycle, k);
+    const sum = active.reduce((a, p) => a + (p.endCharge && p.endCharge >= cd && (p.latest.chargeDate ? addMonths(p.latest.chargeDate, 1) <= cd : true) ? p.monthly : 0), 0);
+    ahead.push({ cd, sum });
+  }
+  const maxAhead = Math.max(1, ...ahead.map(a => a.sum));
+  const planRow = p => {
+    const c = catTop(p.category);
+    return `
+      <button class="row bill" type="button" data-tx="${p.latest.tx.id}">
+        <span class="bill-main">
+          <b>${esc(p.merchant)}</b>
+          <small>${c ? `<span class="catchip"><i style="background:${c.color}"></i>${esc(catLabel(p.category))}</span> · ` : ""}${fmtMoney(p.amount)} ב-${p.of} תשלומים · נקנה ${ddmm(p.date)}</small>
+          <small>${p.active ? `שולמו ${p.paidN}/${p.of} · נשארו ${p.remaining} · אחרון ב${esc(cycleLabel(p.endCharge))}` : p.cancelled ? "בוטל (התקבל זיכוי)" : `הסתיים · ${p.of}/${p.of}`}${p.stale ? " · לא הופיע בחודש האחרון" : ""}</small>
+        </span>
+        <span class="bill-amt"><b>${fmtMoney(p.monthly)}</b><small>${p.active ? `נותר ${fmtMoney(p.remainingAmount)}` : "לחודש"}</small></span>
+      </button>`;
+  };
+  screen(`
+    ${topbar("תשלומים")}
+    <article class="summary">
+      <div class="split two">
+        <div><small>תשלומים פעילים</small><b>${active.length}</b></div>
+        <div><small>נותר לשלם</small><b>${fmtMoney(active.reduce((a, p) => a + p.remainingAmount, 0))}</b></div>
+      </div>
+      ${ahead.length ? `<div class="note">כמה יורד מכל חיוב קדימה (רק תשלומים שכבר קיימים):</div>
+      <div class="cats">${ahead.map(a => `
+        <div class="catrow static"><span class="catname">${esc(cycleLabel(a.cd))}</span>
+        <span class="bar"><span style="width:${(a.sum / maxAhead * 100).toFixed(1)}%;background:var(--c3)"></span></span><b>${fmtMoney(a.sum)}</b></div>`).join("")}</div>` : ""}
+      <div class="note">חשבונות קבועים בתשלומים (כמו בר מים) לא מופיעים כאן.</div>
+    </article>
+    <div class="section-label">פעילים</div>
+    <div class="group">${active.length ? active.map(planRow).join("") : `<div class="row"><span class="val">אין תשלומים פעילים</span></div>`}</div>
+    ${done.length ? `<div class="section-label">הסתיימו</div><div class="group">${done.map(planRow).join("")}</div>` : ""}`);
+  document.getElementById("back").addEventListener("click", renderHome);
+  document.querySelectorAll("[data-tx]").forEach(b => b.addEventListener("click", () => renderCategorize(b.dataset.tx)));
+}
+
+/* ========= מצב כספי: חסכונות וכסף מיועד ========= */
+function renderFinance() {
+  const m = moneyPicture(), f = fin();
+  screen(`
+    ${topbar("מצב כספי")}
+    <div class="section-label">עו"ש</div>
+    <div class="group">
+      <div class="row"><span>יתרה אחרונה</span><span class="val">${m.bank != null ? `${fmtMoney(m.bank)} · ${ddmm(m.bankDate)}` : "ייבא קובץ מדיסקונט"}</span></div>
+    </div>
+    <p class="footnote">מתעדכן אוטומטית מכל ייבוא של קובץ עו"ש.</p>
+
+    <div class="section-label">תיק ניירות ערך</div>
+    <div class="group">
+      <div class="row"><label for="pf">שווי נוכחי</label>
+        <input class="field small" id="pf" type="text" inputmode="decimal" placeholder="0" value="${f.portfolio ? f.portfolio.amount : ""}"></div>
+    </div>
+    <p class="footnote">${f.portfolio && f.portfolio.asOf ? `עודכן ב-${new Date(f.portfolio.asOf + "T12:00:00").toLocaleDateString("he-IL")}. ` : ""}מעדכנים ידנית מדי פעם לפי אפליקציית הבנק.</p>
+
+    <div class="section-label">כסף מיועד (לא שלי)</div>
+    <div class="group" id="ems">
+      ${f.earmarks.map(e => `
+        <div class="row">
+          <input class="field" data-em-name="${e.id}" type="text" maxlength="30" value="${esc(e.name)}" aria-label="שם">
+          <input class="field small" data-em-amt="${e.id}" type="text" inputmode="decimal" value="${e.amount}" aria-label="סכום">
+          <button class="btn link" type="button" data-em-del="${e.id}">הסרה</button>
+        </div>`).join("")}
+      <div class="row"><button class="btn link" id="addEm" type="button">+ הוספת כסף מיועד</button></div>
+    </div>
+    <p class="footnote">כסף שנמצא אצלך אבל שייך למישהו אחר (למשל לסבתא). הוא יורד מ"שלי בפועל" ובהמשך גם מהתחזיות.</p>
+    <button class="btn" id="saveFin" type="button">שמירה</button>`);
+  document.getElementById("back").addEventListener("click", renderHome);
+  const collect = () => {
+    const ff = fin();
+    const pfRaw = document.getElementById("pf").value.trim();
+    const pfVal = pfRaw === "" ? null : parseNum(pfRaw);
+    if (pfVal == null) ff.portfolio = null;
+    else if (!ff.portfolio || ff.portfolio.amount !== pfVal) ff.portfolio = { amount: pfVal, asOf: todayISO() };
+    ff.earmarks = ff.earmarks.map(e => ({
+      ...e,
+      name: (document.querySelector(`[data-em-name="${e.id}"]`) || {}).value?.trim() || e.name,
+      amount: parseNum((document.querySelector(`[data-em-amt="${e.id}"]`) || {}).value || e.amount) || 0
+    }));
+    data.finance = ff;
+  };
+  document.getElementById("addEm").addEventListener("click", () => {
+    collect(); data.finance.earmarks.push({ id: newId("e"), name: "כסף מיועד", amount: 0 }); renderFinance();
+  });
+  document.querySelectorAll("[data-em-del]").forEach(b => b.addEventListener("click", () => {
+    collect(); data.finance.earmarks = data.finance.earmarks.filter(e => e.id !== b.dataset.emDel); renderFinance();
+  }));
+  document.getElementById("saveFin").addEventListener("click", async () => {
+    collect();
+    if (data.finance.portfolio && !isFinite(data.finance.portfolio.amount)) { toast("סכום לא תקין"); return; }
+    await saveData(); toast("נשמר"); renderHome();
+  });
+}
+
+/* ========= עריכת קטגוריות ========= */
+function renderCategories() {
+  screen(`
+    ${topbar("קטגוריות")}
+    <p class="lead" style="max-width:none">אפשר להוסיף, לשנות שם ולמחוק. עסקאות מקטגוריה שנמחקה עוברות ל"ממתין לסיווג".</p>
+    ${cats().map(c => `
+      <div class="group">
+        <div class="row head">
+          <span class="catname"><i style="background:${c.color}"></i>${esc(c.name)}</span>
+          <span>
+            <button class="btn link" type="button" data-ren-top="${c.id}">שינוי שם</button>
+            ${c.id !== "other" ? `<button class="btn link danger-link" type="button" data-del-top="${c.id}">מחיקה</button>` : ""}
+          </span>
+        </div>
+        ${c.subs.map(([sid, sl]) => `
+          <div class="row">
+            <span>${esc(sl)}</span>
+            <span>
+              <button class="btn link" type="button" data-ren-sub="${c.id}/${sid}">שינוי שם</button>
+              ${c.subs.length > 1 ? `<button class="btn link danger-link" type="button" data-del-sub="${c.id}/${sid}">מחיקה</button>` : ""}
+            </span>
+          </div>`).join("")}
+        <div class="row"><button class="btn link" type="button" data-add-sub="${c.id}">+ תת-קטגוריה</button></div>
+      </div>`).join("")}
+    <button class="btn secondary" id="addTop" type="button">+ קטגוריה ראשית</button>`);
+  document.getElementById("back").addEventListener("click", renderSettings);
+
+  const ask = (row, value, onSave) => {
+    row.innerHTML = `<input class="field" type="text" maxlength="30" value="${esc(value)}" aria-label="שם"><button class="btn link" type="button">שמירה</button>`;
+    const field = row.querySelector("input"); field.focus(); field.select();
+    const go = async () => { const v = field.value.trim(); if (!v) return; await onSave(v); await saveData(); renderCategories(); };
+    row.querySelector("button").addEventListener("click", go);
+    field.addEventListener("keydown", e => { if (e.key === "Enter") go(); });
+  };
+  const armed = (btn, fn) => {
+    if (!btn.dataset.armed) { btn.dataset.armed = "1"; btn.textContent = "לחץ שוב למחיקה"; setTimeout(() => { if (btn.isConnected) { delete btn.dataset.armed; btn.textContent = "מחיקה"; } }, 3500); return; }
+    fn();
+  };
+  const dropKeys = pred => {
+    data.tx.forEach(t => { if (t.category && pred(t.category)) { t.category = null; t.catSource = null; t.needsReview = true; } });
+    for (const [k, v] of Object.entries(data.rules.merchant)) if (v && pred(v)) delete data.rules.merchant[k];
+    for (const [k, v] of Object.entries(data.rules.sector)) if (v && pred(v)) data.rules.sector[k] = "";
+  };
+  document.querySelectorAll("[data-ren-top]").forEach(b => b.addEventListener("click", () => {
+    const c = cats().find(x => x.id === b.dataset.renTop);
+    ask(b.closest(".row"), c.name, v => { c.name = v; c.short = v.replace(/^דירה – /, ""); });
+  }));
+  document.querySelectorAll("[data-ren-sub]").forEach(b => b.addEventListener("click", () => {
+    const s = subOf(b.dataset.renSub);
+    ask(b.closest(".row"), s[1], v => { s[1] = v; });
+  }));
+  document.querySelectorAll("[data-add-sub]").forEach(b => b.addEventListener("click", () => {
+    const c = cats().find(x => x.id === b.dataset.addSub);
+    ask(b.closest(".row"), "", v => { c.subs.push([newId("s"), v]); });
+  }));
+  document.querySelectorAll("[data-del-sub]").forEach(b => b.addEventListener("click", () => armed(b, async () => {
+    const key = b.dataset.delSub, c = catTop(key);
+    c.subs = c.subs.filter(s => s[0] !== key.split("/")[1]);
+    dropKeys(k => k === key);
+    await saveData(); renderCategories(); toast("נמחק");
+  })));
+  document.querySelectorAll("[data-del-top]").forEach(b => b.addEventListener("click", () => armed(b, async () => {
+    const id = b.dataset.delTop;
+    data.cats = data.cats.filter(c => c.id !== id);
+    dropKeys(k => k.split("/")[0] === id);
+    await saveData(); renderCategories(); toast("נמחק");
+  })));
+  document.getElementById("addTop").addEventListener("click", () => {
+    const btn = document.getElementById("addTop");
+    const holder = document.createElement("div"); holder.className = "row"; btn.replaceWith(holder);
+    ask(holder, "", v => {
+      const used = data.cats.length;
+      data.cats.splice(data.cats.length - 1, 0, { id: newId("c"), name: v, short: v, color: PALETTE[used % PALETTE.length], subs: [[newId("s"), "כללי"]] });
+    });
   });
 }
 
@@ -1387,6 +1976,7 @@ async function renderSettings() {
 
     <div class="section-label">סיווג</div>
     <div class="group">
+      <div class="row"><button class="row-btn" id="catsBtn" type="button"><span>קטגוריות</span><span class="val">‹</span></button></div>
       <div class="row"><button class="row-btn" id="rulesBtn" type="button"><span>כללי סיווג</span><span class="val">‹</span></button></div>
     </div>
 
@@ -1398,7 +1988,7 @@ async function renderSettings() {
 
     <div class="section-label">מתקדם</div>
     <div class="group">
-      <div class="row"><button class="row-btn" id="advBtn" type="button"><span>ניהול נתונים</span><span class="val">‹</span></button></div>
+      <div class="row"><button class="row-btn" id="advBtn" type="button"><span>גיבוי וניהול נתונים</span><span class="val">‹</span></button></div>
     </div>`);
   document.getElementById("back").addEventListener("click", renderHome);
   document.querySelectorAll(".seg button").forEach(b => b.addEventListener("click", async () => {
@@ -1414,6 +2004,7 @@ async function renderSettings() {
   document.getElementById("faceBtn").addEventListener("click", () => faceOn ? renderFaceOn() : faceAvail ? renderFaceEnable() : toast("Face ID לא זמין בדפדפן הזה"));
   document.getElementById("rkBtn").addEventListener("click", () => renderRecoveryIntro(rkOn));
   document.getElementById("rulesBtn").addEventListener("click", renderRules);
+  document.getElementById("catsBtn").addEventListener("click", renderCategories);
   document.getElementById("checkUpdate").addEventListener("click", () => checkForUpdate(true));
   document.getElementById("advBtn").addEventListener("click", renderAdvanced);
   document.querySelectorAll("[data-rename]").forEach(btn => btn.addEventListener("click", () => {
@@ -1521,7 +2112,7 @@ function renderRules() {
   const sectors = [...new Set(data.tx.map(t => t.branch || "").filter(Boolean))].sort();
   const mrules = Object.entries(data.rules.merchant).sort((a, b) => a[0].localeCompare(b[0], "he"));
   const opts = sel => `<option value="" ${!sel ? "selected" : ""}>ממתין לסיווג</option>` +
-    ALL_SUBS.map(s => `<option value="${s.key}" ${sel === s.key ? "selected" : ""}>${esc(s.label)}</option>`).join("");
+    allSubs().map(s => `<option value="${s.key}" ${sel === s.key ? "selected" : ""}>${esc(s.label)}</option>`).join("");
   screen(`
     ${topbar("כללי סיווג")}
     <p class="lead" style="max-width:none">סדר העדיפויות: קודם סיווג ידני של עסקה, אחר כך כלל לבית העסק, ואז הענף של כאל.</p>
@@ -1552,19 +2143,50 @@ function renderRules() {
 
 function renderAdvanced() {
   screen(`
-    ${topbar("ניהול נתונים")}
+    ${topbar("גיבוי וניהול נתונים")}
     <div class="card col">
       <h3>מה שמור במכשיר</h3>
-      <p>${data.cards.length} כרטיסים · ${data.statements.length} חודשים · ${data.tx.length} עסקאות · ${Object.keys(data.rules.merchant).length} כללי סיווג</p>
+      <p>${data.cards.length} כרטיסים · ${(data.accounts || []).length} חשבונות · ${data.statements.length} חודשים · ${data.tx.length} תנועות · ${Object.keys(data.rules.merchant).length} כללי סיווג</p>
     </div>
+    <div class="section-label">גיבוי מוצפן</div>
+    <div class="group">
+      <div class="row"><button class="row-btn" id="doBackup" type="button"><span>יצירת קובץ גיבוי</span><span class="val">‹</span></button></div>
+      <div class="row"><label class="row-btn" for="restoreFile"><span>שחזור מקובץ גיבוי</span><span class="val">‹</span></label>
+        <input id="restoreFile" type="file" accept=".json,application/json" hidden></div>
+    </div>
+    <p class="footnote">הגיבוי מוצפן: נפתח רק עם קוד הגישה (או מפתח השחזור) שהיה בזמן הגיבוי. שמור אותו ב-iCloud Drive. כדאי לגבות אחרי כל ייבוא חודשי.</p>
     <div style="flex:1"></div>
     <button class="btn danger" id="wipe" type="button">מחיקת כל הנתונים…</button>
     <p class="footnote">המחיקה דורשת קוד גישה ואישור נוסף.</p>`);
   document.getElementById("back").addEventListener("click", renderSettings);
+  document.getElementById("doBackup").addEventListener("click", async () => {
+    try { const r = await exportBackup(); if (r !== "cancel") { settings.lastBackup = todayISO(); await saveSettings(); toast("הגיבוי נוצר"); } }
+    catch { toast("יצירת הגיבוי נכשלה"); }
+  });
+  document.getElementById("restoreFile").addEventListener("change", e => pickRestore(e.target, renderAdvanced));
   document.getElementById("wipe").addEventListener("click", () => renderVerifyCode({
     title: "הזן קוד כדי להמשיך", onCancel: renderAdvanced,
     onOk: raw => { raw.fill(0); renderWipeConfirm(renderAdvanced); }
   }));
+}
+
+async function pickRestore(input, onCancel) {
+  const f = input.files && input.files[0]; input.value = "";
+  if (!f) return;
+  let obj;
+  try { obj = await readBackup(f); } catch { toast("זה לא קובץ גיבוי של האפליקציה"); return; }
+  screen(`
+    ${topbar("שחזור מגיבוי", "ביטול")}
+    <div class="card col danger-card">
+      <h3>הנתונים הנוכחיים במכשיר יוחלפו</h3>
+      <p>גיבוי מ-${new Date(obj.createdAt).toLocaleDateString("he-IL")}. אחרי השחזור תתבקש להזין את קוד הגישה שהיה בזמן הגיבוי.</p>
+    </div>
+    <button class="btn danger" id="doRestore" type="button">שחזור</button>`);
+  document.getElementById("back").addEventListener("click", onCancel);
+  document.getElementById("doRestore").addEventListener("click", async () => {
+    try { await restoreBackup(obj); dek = null; settings = null; data = null; state = "locked"; renderLock(); toast("שוחזר. הזן את הקוד"); }
+    catch { toast("השחזור נכשל"); }
+  });
 }
 
 /* ========= עדכוני גרסה ========= */
