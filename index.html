@@ -1,0 +1,606 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="הוצאות">
+<meta name="theme-color" content="#f3f5f4">
+<title>מעקב הוצאות</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rubik:wght@500;600;700&family=Assistant:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+/* תוכנית: אפליקציה של מסך אחד, כרטיסים על רקע אפור-ירקרק, ירוק "שטר" עמוק כצבע פעולה */
+:root {
+  --bg: #f3f5f4;
+  --surface: #ffffff;
+  --ink: #17231f;
+  --muted: #5f6d68;
+  --line: #dde3e0;
+  --accent: #0d6b52;
+  --accent-soft: #e2f0ea;
+  --danger: #b3261e;
+  --ok: #1f7a3a;
+  --font-display: "Rubik", "Arial Hebrew", system-ui, sans-serif;
+  --font-body: "Assistant", "Arial Hebrew", system-ui, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1513; --surface: #18211e; --ink: #e8efec; --muted: #9aa8a2;
+    --line: #2a3531; --accent: #4cc79f; --accent-soft: #1c3a30; --danger: #ff8a80; --ok: #6fd18c;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1513; --surface: #18211e; --ink: #e8efec; --muted: #9aa8a2;
+  --line: #2a3531; --accent: #4cc79f; --accent-soft: #1c3a30; --danger: #ff8a80; --ok: #6fd18c;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--bg); color: var(--ink);
+  font-family: var(--font-body); font-size: 17px; line-height: 1.5;
+  -webkit-tap-highlight-color: transparent;
+  padding: env(safe-area-inset-top) max(16px, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(16px, env(safe-area-inset-left));
+}
+h1, h2, h3 { font-family: var(--font-display); text-wrap: balance; margin: 0; line-height: 1.2; }
+button { font: inherit; color: inherit; }
+button:focus-visible, select:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+#app { max-width: 480px; margin: 0 auto; min-height: 100%; display: flex; flex-direction: column; }
+.screen { flex: 1; display: flex; flex-direction: column; gap: 20px; padding: 24px 0 32px; }
+.center { align-items: center; justify-content: center; text-align: center; }
+.lead { color: var(--muted); max-width: 34ch; margin: 0; }
+
+.logo {
+  width: 72px; height: 72px; border-radius: 22px; display: grid; place-items: center;
+  background: var(--accent-soft); color: var(--accent);
+  font-family: var(--font-display); font-size: 38px; font-weight: 700;
+}
+.btn {
+  border: 0; border-radius: 14px; padding: 14px 18px; font-weight: 700; cursor: pointer;
+  background: var(--accent); color: var(--surface); width: 100%;
+}
+.btn.secondary { background: var(--accent-soft); color: var(--accent); }
+.btn.danger { background: transparent; color: var(--danger); border: 1.5px solid var(--danger); }
+.btn.link { background: none; color: var(--accent); width: auto; padding: 8px; }
+
+/* מקלדת קוד */
+.pad-wrap { display: flex; flex-direction: column; align-items: center; gap: 22px; }
+.pad-title { font-family: var(--font-display); font-size: 22px; font-weight: 600; }
+.pad-msg { min-height: 48px; color: var(--muted); font-size: 15px; max-width: 30ch; text-align: center; }
+.pad-msg.error { color: var(--danger); }
+.dots { display: flex; gap: 16px; direction: ltr; }
+.dot { width: 14px; height: 14px; border-radius: 50%; border: 1.6px solid var(--ink); transition: background .1s; }
+.dot.on { background: var(--ink); }
+.shake { animation: shake .36s; }
+@keyframes shake { 20%{transform:translateX(-12px)} 40%{transform:translateX(12px)} 60%{transform:translateX(-7px)} 80%{transform:translateX(7px)} }
+.keys { display: grid; grid-template-columns: repeat(3, 76px); gap: 16px 24px; direction: ltr; }
+.key {
+  width: 76px; height: 76px; border-radius: 50%; border: 0; cursor: pointer;
+  background: var(--surface); box-shadow: 0 0 0 1px var(--line) inset;
+  font-family: var(--font-display); font-size: 30px; font-weight: 500;
+  font-variant-numeric: tabular-nums; transition: transform .08s, background .08s;
+}
+.key:active { transform: scale(.94); background: var(--accent-soft); }
+.key.plain { background: none; box-shadow: none; font-size: 15px; font-family: var(--font-body); font-weight: 600; }
+.key:disabled { opacity: .35; }
+.key.hidden { visibility: hidden; }
+.busy .keys { opacity: .5; pointer-events: none; }
+
+/* בית */
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.topbar h1 { font-size: 30px; }
+.icon-btn {
+  width: 44px; height: 44px; border-radius: 12px; border: 0; cursor: pointer;
+  background: var(--surface); box-shadow: 0 0 0 1px var(--line) inset; display: grid; place-items: center;
+}
+.icon-btn svg { width: 22px; height: 22px; stroke: var(--ink); }
+.actions { display: flex; gap: 8px; }
+.card {
+  background: var(--surface); border-radius: 18px; padding: 16px 18px;
+  box-shadow: 0 0 0 1px var(--line) inset; display: flex; gap: 14px; align-items: flex-start;
+}
+.card .chip {
+  flex: none; width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center;
+  background: var(--accent-soft); color: var(--accent); font-weight: 700;
+}
+.card .chip.ok { color: var(--ok); }
+.card h3 { font-size: 17px; margin-bottom: 2px; }
+.card p { margin: 0; color: var(--muted); font-size: 15px; }
+.stack { display: flex; flex-direction: column; gap: 12px; }
+
+/* הגדרות */
+.section-label { font-size: 13px; font-weight: 700; color: var(--muted); letter-spacing: .02em; margin: 8px 4px -4px; }
+.group { background: var(--surface); border-radius: 18px; box-shadow: 0 0 0 1px var(--line) inset; overflow: hidden; }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; border-top: 1px solid var(--line); }
+.row:first-child { border-top: 0; }
+.row button.row-btn { all: unset; cursor: pointer; display: flex; justify-content: space-between; width: 100%; }
+.row .val { color: var(--muted); font-size: 15px; }
+.seg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; padding: 12px 14px 14px; }
+.seg button {
+  border: 0; border-radius: 10px; padding: 9px 4px; cursor: pointer; font-size: 14px; font-weight: 600;
+  background: var(--bg); color: var(--ink);
+}
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--surface); }
+.footnote { color: var(--muted); font-size: 13px; padding: 0 4px; margin: 0; }
+
+#cover {
+  position: fixed; inset: 0; background: var(--bg); z-index: 50;
+  display: none; align-items: center; justify-content: center; flex-direction: column; gap: 12px;
+}
+#cover.show { display: flex; }
+#toast {
+  position: fixed; bottom: calc(24px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%);
+  background: var(--ink); color: var(--bg); padding: 10px 18px; border-radius: 999px; font-weight: 600;
+  opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 60;
+}
+#toast.show { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .shake { animation: none; } * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="cover" aria-hidden="true"><div class="logo">₪</div><div class="lead">מעקב הוצאות</div></div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+"use strict";
+/* ========= אחסון (IndexedDB, במכשיר בלבד) ========= */
+const DB_NAME = "finance-tracker", STORE = "kv";
+let dbPromise = null;
+function openDB() {
+  if (!dbPromise) dbPromise = new Promise((res, rej) => {
+    try {
+      const r = indexedDB.open(DB_NAME, 1);
+      r.onupgradeneeded = () => r.result.createObjectStore(STORE);
+      r.onsuccess = () => res(r.result);
+      r.onerror = () => rej(r.error);
+    } catch (e) { rej(e); }
+  });
+  return dbPromise;
+}
+async function kv(mode, fn) {
+  const db = await openDB();
+  return new Promise((res, rej) => {
+    const tx = db.transaction(STORE, mode);
+    const req = fn(tx.objectStore(STORE));
+    tx.oncomplete = () => res(req && req.result);
+    tx.onerror = () => rej(tx.error);
+    tx.onabort = () => rej(tx.error);
+  });
+}
+const kvGet = k => kv("readonly", s => s.get(k));
+const kvSet = (k, v) => kv("readwrite", s => s.put(v, k));
+const kvClear = () => kv("readwrite", s => s.clear());
+
+/* ========= הצפנה =========
+   מפתח נתונים אקראי (AES-GCM 256) מצפין את כל הנתונים.
+   המפתח הזה עצמו שמור מוצפן במפתח שנגזר מקוד הגישה (PBKDF2-SHA256).
+   הקוד לא נשמר בשום מקום; קוד שגוי פשוט לא מצליח לפענח. */
+const ITERATIONS = 310000;
+const te = new TextEncoder(), td = new TextDecoder();
+const rand = n => crypto.getRandomValues(new Uint8Array(n));
+
+async function deriveKEK(code, salt, iterations) {
+  const base = await crypto.subtle.importKey("raw", te.encode(code), "PBKDF2", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey(
+    { name: "PBKDF2", salt, iterations, hash: "SHA-256" },
+    base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+}
+const importDEK = raw => crypto.subtle.importKey("raw", raw, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
+
+async function wrapAndStore(code, raw) {
+  const salt = rand(16), iv = rand(12);
+  const kek = await deriveKEK(code, salt, ITERATIONS);
+  const wrapped = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, kek, raw));
+  await kvSet("vault", { v: 1, salt, iterations: ITERATIONS, iv, wrapped });
+}
+async function unwrapRaw(code) {
+  const v = await kvGet("vault");
+  if (!v) return null;
+  const kek = await deriveKEK(code, v.salt, v.iterations);
+  try { return new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv: v.iv }, kek, v.wrapped)); }
+  catch { return null; }
+}
+async function encryptJSON(obj) {
+  const iv = rand(12);
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, dek, te.encode(JSON.stringify(obj))));
+  return { iv, ct };
+}
+async function decryptJSON(box) {
+  const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: box.iv }, dek, box.ct);
+  return JSON.parse(td.decode(pt));
+}
+
+/* ========= קוד גישה: חוזק והשהיות ========= */
+const CODE_LEN = 6, ATTEMPTS_BEFORE_DELAY = 5;
+function isTooSimple(code) {
+  const d = [...code].map(Number);
+  if (new Set(d).size === 1) return true;
+  const steps = new Set(d.slice(1).map((x, i) => x - d[i]));
+  return steps.size === 1 && (steps.has(1) || steps.has(-1));
+}
+function delayFor(failures) {
+  if (failures < 5) return 0;
+  return ({ 5: 30, 6: 60, 7: 300, 8: 900 }[failures] ?? 3600) * 1000;
+}
+async function getGuard() { return (await kvGet("guard")) || { failed: 0, lockedUntil: 0 }; }
+const setGuard = g => kvSet("guard", g);
+
+/* ========= מצב האפליקציה ========= */
+let dek = null;            // מפתח הנתונים — קיים בזיכרון רק כשהאפליקציה פתוחה
+let settings = null;
+let hiddenAt = null;
+let state = "loading";     // setup | locked | unlocked
+const AUTO_LOCK = [
+  { s: 0, label: "מיידית" }, { s: 30, label: "30 שניות" },
+  { s: 60, label: "דקה" }, { s: 300, label: "5 דקות" }
+];
+const app = document.getElementById("app");
+const cover = document.getElementById("cover");
+
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("show"), 2200);
+}
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+async function saveSettings() { await kvSet("settings", await encryptJSON(settings)); }
+
+function lock() {
+  dek = null; settings = null; hiddenAt = null;
+  state = "locked";
+  renderLock();
+}
+
+/* ========= רכיב מקלדת קוד ========= */
+function mountPad(host, { title, message = "", error = false, onComplete, extraKey = null }) {
+  host.innerHTML = `
+    <div class="pad-wrap">
+      <div class="pad-title">${esc(title)}</div>
+      <div class="pad-msg ${error ? "error" : ""}" aria-live="polite"></div>
+      <div class="dots" role="img" aria-label="הוזנו 0 מתוך ${CODE_LEN} ספרות">
+        ${"<span class='dot'></span>".repeat(CODE_LEN)}
+      </div>
+      <div class="keys">
+        ${[1,2,3,4,5,6,7,8,9].map(n => `<button class="key" data-d="${n}" type="button">${n}</button>`).join("")}
+        ${extraKey ? `<button class="key plain" data-x type="button">${esc(extraKey.label)}</button>` : `<span class="key hidden"></span>`}
+        <button class="key" data-d="0" type="button">0</button>
+        <button class="key plain hidden" data-del type="button" aria-label="מחיקה">מחיקה</button>
+      </div>
+    </div>`;
+  const wrap = host.querySelector(".pad-wrap");
+  const msgEl = host.querySelector(".pad-msg");
+  const dotsEl = host.querySelector(".dots");
+  const dots = [...host.querySelectorAll(".dot")];
+  const del = host.querySelector("[data-del]");
+  msgEl.textContent = message;
+  let code = "", busy = false;
+
+  const paint = () => {
+    dots.forEach((d, i) => d.classList.toggle("on", i < code.length));
+    dotsEl.setAttribute("aria-label", `הוזנו ${code.length} מתוך ${CODE_LEN} ספרות`);
+    del.classList.toggle("hidden", code.length === 0);
+  };
+  const ctl = {
+    setMessage(text, isError = false) { msgEl.textContent = text; msgEl.classList.toggle("error", isError); },
+    shake() {
+      dotsEl.classList.remove("shake"); void dotsEl.offsetWidth; dotsEl.classList.add("shake");
+      if (navigator.vibrate) navigator.vibrate(80);
+    },
+    setBusy(b) { busy = b; wrap.classList.toggle("busy", b); },
+    setDisabled(b) { host.querySelectorAll("[data-d]").forEach(k => k.disabled = b); }
+  };
+  const press = d => {
+    if (busy || code.length >= CODE_LEN) return;
+    code += d; paint();
+    if (code.length === CODE_LEN) {
+      const entered = code;
+      setTimeout(async () => {
+        code = ""; paint();
+        await onComplete(entered, ctl);
+      }, 120);
+    }
+  };
+  host.querySelectorAll("[data-d]").forEach(b => b.addEventListener("click", () => press(b.dataset.d)));
+  del.addEventListener("click", () => { if (!busy && code) { code = code.slice(0, -1); paint(); } });
+  if (extraKey) host.querySelector("[data-x]").addEventListener("click", extraKey.onClick);
+  paint();
+  return ctl;
+}
+
+/* ========= הגדרה ראשונית ========= */
+function renderWelcome() {
+  app.innerHTML = `
+    <section class="screen center">
+      <div class="logo" aria-hidden="true">₪</div>
+      <h1>ברוך הבא</h1>
+      <p class="lead">לפני שמתחילים נגדיר קוד גישה בן 6 ספרות. כל הנתונים יישמרו במכשיר הזה בלבד, מוצפנים בקוד שלך. בלי הקוד אי אפשר לקרוא אותם.</p>
+      <div style="flex:1"></div>
+      <button class="btn" id="start" type="button">יצירת קוד גישה</button>
+    </section>`;
+  document.getElementById("start").addEventListener("click", () => renderCreate());
+}
+
+function renderCreate(message = "6 ספרות", error = false) {
+  app.innerHTML = `<section class="screen center" id="host"></section>`;
+  mountPad(document.getElementById("host"), {
+    title: "בחר קוד גישה", message, error,
+    onComplete: (code, pad) => {
+      if (isTooSimple(code)) { pad.setMessage("הקוד פשוט מדי. בחר קוד אחר", true); pad.shake(); return; }
+      renderConfirm(code);
+    }
+  });
+}
+
+function renderConfirm(first) {
+  app.innerHTML = `<section class="screen center" id="host"></section>`;
+  mountPad(document.getElementById("host"), {
+    title: "הזן שוב את הקוד",
+    extraKey: { label: "חזרה", onClick: () => renderCreate() },
+    onComplete: async (code, pad) => {
+      if (code !== first) { renderCreate("הקודים לא תואמים. נסה שוב", true); return; }
+      pad.setBusy(true); pad.setMessage("מצפין ושומר…");
+      try {
+        const raw = rand(32);
+        await wrapAndStore(code, raw);
+        dek = await importDEK(raw); raw.fill(0);
+        settings = { autoLock: 30, createdAt: new Date().toISOString() };
+        await saveSettings();
+        await setGuard({ failed: 0, lockedUntil: 0 });
+        try { if (navigator.storage && navigator.storage.persist) await navigator.storage.persist(); } catch {}
+        state = "unlocked";
+        renderHome();
+        toast("הקוד נשמר");
+      } catch (e) {
+        pad.setBusy(false);
+        pad.setMessage("השמירה נכשלה. ייתכן שהדפדפן חוסם אחסון (למשל בגלישה פרטית).", true);
+      }
+    }
+  });
+}
+
+/* ========= מסך נעילה ========= */
+let lockTimer = null;
+async function renderLock() {
+  clearInterval(lockTimer);
+  app.innerHTML = `
+    <section class="screen center">
+      <div class="logo" aria-hidden="true">₪</div>
+      <div id="host"></div>
+    </section>`;
+  const pad = mountPad(document.getElementById("host"), {
+    title: "הזן קוד גישה",
+    onComplete: async (code, pad) => {
+      const g = await getGuard();
+      if (g.lockedUntil > Date.now()) return;
+      pad.setBusy(true); pad.setMessage("בודק…");
+      const raw = await unwrapRaw(code);
+      pad.setBusy(false);
+      if (raw) {
+        dek = await importDEK(raw); raw.fill(0);
+        await setGuard({ failed: 0, lockedUntil: 0 });
+        try { settings = await decryptJSON(await kvGet("settings")); }
+        catch { settings = { autoLock: 30 }; }
+        state = "unlocked";
+        renderHome();
+        return;
+      }
+      const failed = g.failed + 1;
+      const wait = delayFor(failed);
+      await setGuard({ failed, lockedUntil: wait ? Date.now() + wait : 0 });
+      pad.shake();
+      if (wait) startCountdown(pad);
+      else {
+        const left = ATTEMPTS_BEFORE_DELAY - failed;
+        pad.setMessage(left === 1 ? "קוד שגוי. נותר ניסיון אחד לפני השהיה" : left === 2 ? "קוד שגוי. נותרו 2 ניסיונות לפני השהיה" : "קוד שגוי", true);
+      }
+    }
+  });
+  startCountdown(pad);
+}
+async function startCountdown(pad) {
+  clearInterval(lockTimer);
+  const tick = async () => {
+    const g = await getGuard();
+    const ms = g.lockedUntil - Date.now();
+    if (ms > 0) {
+      const s = Math.ceil(ms / 1000);
+      pad.setDisabled(true);
+      pad.setMessage(`יותר מדי ניסיונות שגויים. נסה שוב בעוד ${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`, true);
+    } else {
+      clearInterval(lockTimer);
+      pad.setDisabled(false);
+      if (g.failed >= ATTEMPTS_BEFORE_DELAY) pad.setMessage("אפשר לנסות שוב");
+    }
+  };
+  await tick();
+  lockTimer = setInterval(tick, 1000);
+}
+
+/* ========= בית ========= */
+const ICON_LOCK = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>`;
+const ICON_GEAR = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>`;
+
+function autoLockLabel() {
+  const o = AUTO_LOCK.find(a => a.s === settings.autoLock) || AUTO_LOCK[1];
+  return o.s === 0 ? "מיידית" : `אחרי ${o.label}`;
+}
+
+function renderHome() {
+  app.innerHTML = `
+    <section class="screen">
+      <div class="topbar">
+        <h1>סקירה</h1>
+        <div class="actions">
+          <button class="icon-btn" id="lockNow" type="button" aria-label="נעילה עכשיו">${ICON_LOCK}</button>
+          <button class="icon-btn" id="openSettings" type="button" aria-label="הגדרות">${ICON_GEAR}</button>
+        </div>
+      </div>
+      <div class="stack">
+        <article class="card">
+          <div class="chip ok" aria-hidden="true">✓</div>
+          <div><h3>האפליקציה מאובטחת</h3>
+          <p>קוד גישה פעיל · נעילה אוטומטית ${esc(autoLockLabel())} · הנתונים מוצפנים במכשיר</p></div>
+        </article>
+        <article class="card">
+          <div class="chip" aria-hidden="true">⇩</div>
+          <div><h3>בקרוב: ייבוא מכאל</h3>
+          <p>בשלב 2 תבחר קובץ אקסל של כאל, והכרטיס וכל העסקאות יופיעו כאן. הקובץ נקרא במכשיר ולא נשלח לשום מקום.</p></div>
+        </article>
+      </div>
+    </section>`;
+  document.getElementById("lockNow").addEventListener("click", lock);
+  document.getElementById("openSettings").addEventListener("click", renderSettings);
+}
+
+/* ========= הגדרות ========= */
+async function renderSettings() {
+  let persisted = null;
+  try { persisted = navigator.storage && navigator.storage.persisted ? await navigator.storage.persisted() : null; } catch {}
+  app.innerHTML = `
+    <section class="screen">
+      <div class="topbar">
+        <h1>הגדרות</h1>
+        <button class="btn link" id="back" type="button">סיום</button>
+      </div>
+
+      <div class="section-label">נעילה אוטומטית</div>
+      <div class="group">
+        <div class="seg" role="group" aria-label="נעילה אוטומטית">
+          ${AUTO_LOCK.map(a => `<button type="button" data-s="${a.s}" aria-pressed="${a.s === settings.autoLock}">${a.label}</button>`).join("")}
+        </div>
+      </div>
+      <p class="footnote">כמה זמן מחוץ לאפליקציה עד שצריך להזין קוד שוב.</p>
+
+      <div class="section-label">אבטחה</div>
+      <div class="group">
+        <div class="row"><button class="row-btn" id="changeCode" type="button"><span>שינוי קוד גישה</span><span class="val">‹</span></button></div>
+        <div class="row"><span>אחסון קבוע בדפדפן</span><span class="val">${persisted === true ? "מאושר" : persisted === false ? "לא מאושר" : "לא ידוע"}</span></div>
+      </div>
+      <p class="footnote">הנתונים מוצפנים במפתח שנגזר מהקוד שלך ונשמרים בדפדפן במכשיר הזה בלבד. אם תשכח את הקוד אי אפשר לשחזר אותם.</p>
+
+      <div class="section-label">בדיקות</div>
+      <div class="group"><div class="row" style="display:block">
+        <button class="btn danger" id="wipe" type="button">מחיקת כל הנתונים והתחלה מחדש</button>
+      </div></div>
+    </section>`;
+  document.getElementById("back").addEventListener("click", renderHome);
+  document.querySelectorAll(".seg button").forEach(b => b.addEventListener("click", async () => {
+    settings.autoLock = Number(b.dataset.s);
+    await saveSettings();
+    document.querySelectorAll(".seg button").forEach(x => x.setAttribute("aria-pressed", x === b));
+    toast("נשמר");
+  }));
+  document.getElementById("changeCode").addEventListener("click", () => renderChangeCurrent());
+  const wipe = document.getElementById("wipe");
+  wipe.addEventListener("click", async () => {
+    if (!wipe.dataset.armed) {
+      wipe.dataset.armed = "1";
+      wipe.textContent = "לחץ שוב לאישור: הכול יימחק";
+      setTimeout(() => { if (wipe.isConnected) { delete wipe.dataset.armed; wipe.textContent = "מחיקת כל הנתונים והתחלה מחדש"; } }, 4000);
+      return;
+    }
+    await kvClear();
+    dek = null; settings = null; state = "setup";
+    renderWelcome();
+  });
+}
+
+/* ========= שינוי קוד ========= */
+function renderChangeCurrent(message = "", error = false) {
+  app.innerHTML = `<section class="screen center" id="host"></section>`;
+  mountPad(document.getElementById("host"), {
+    title: "הזן את הקוד הנוכחי", message, error,
+    extraKey: { label: "ביטול", onClick: renderSettings },
+    onComplete: async (code, pad) => {
+      const g = await getGuard();
+      if (g.lockedUntil > Date.now()) { pad.setMessage("יותר מדי ניסיונות. נסה שוב מאוחר יותר", true); return; }
+      pad.setBusy(true); pad.setMessage("בודק…");
+      const raw = await unwrapRaw(code);
+      pad.setBusy(false);
+      if (!raw) {
+        const failed = g.failed + 1, wait = delayFor(failed);
+        await setGuard({ failed, lockedUntil: wait ? Date.now() + wait : 0 });
+        pad.shake(); pad.setMessage("קוד שגוי", true);
+        return;
+      }
+      await setGuard({ failed: 0, lockedUntil: 0 });
+      renderChangeNew(raw);
+    }
+  });
+}
+function renderChangeNew(raw, message = "", error = false) {
+  app.innerHTML = `<section class="screen center" id="host"></section>`;
+  mountPad(document.getElementById("host"), {
+    title: "בחר קוד חדש", message, error,
+    extraKey: { label: "ביטול", onClick: () => { raw.fill(0); renderSettings(); } },
+    onComplete: (code, pad) => {
+      if (isTooSimple(code)) { pad.setMessage("הקוד פשוט מדי. בחר קוד אחר", true); pad.shake(); return; }
+      app.innerHTML = `<section class="screen center" id="host"></section>`;
+      mountPad(document.getElementById("host"), {
+        title: "הזן שוב את הקוד החדש",
+        extraKey: { label: "ביטול", onClick: () => { raw.fill(0); renderSettings(); } },
+        onComplete: async (again, pad2) => {
+          if (again !== code) { renderChangeNew(raw, "הקודים לא תואמים. נסה שוב", true); return; }
+          pad2.setBusy(true); pad2.setMessage("מצפין מחדש…");
+          try {
+            await wrapAndStore(again, raw);
+            raw.fill(0);
+            renderSettings();
+            toast("הקוד עודכן");
+          } catch {
+            pad2.setBusy(false); pad2.setMessage("השמירה נכשלה. נסה שוב", true);
+          }
+        }
+      });
+    }
+  });
+}
+
+/* ========= רקע וחזרה ========= */
+function onHidden() {
+  if (state !== "unlocked") return;
+  cover.classList.add("show");           // מסתיר תוכן בתמונת מחליף האפליקציות
+  if (settings && settings.autoLock === 0) lock();
+  else hiddenAt = hiddenAt || Date.now();
+}
+function onVisible() {
+  if (state === "unlocked" && hiddenAt && settings && Date.now() - hiddenAt >= settings.autoLock * 1000) lock();
+  hiddenAt = null;
+  cover.classList.remove("show");
+}
+document.addEventListener("visibilitychange", () => document.hidden ? onHidden() : onVisible());
+window.addEventListener("pagehide", onHidden);
+window.addEventListener("pageshow", e => { if (e.persisted) onVisible(); });
+
+/* ========= הפעלה ========= */
+if ("serviceWorker" in navigator && location.protocol === "https:") {
+  navigator.serviceWorker.register("sw.js").catch(() => {});
+}
+
+(async function boot() {
+  if (!window.crypto || !crypto.subtle || !window.indexedDB) {
+    app.innerHTML = `<section class="screen center"><h1>הדפדפן לא נתמך</h1><p class="lead">צריך Safari או Chrome עדכני, לא במצב גלישה פרטית.</p></section>`;
+    return;
+  }
+  try {
+    const vault = await kvGet("vault");
+    if (vault) { state = "locked"; renderLock(); }
+    else { state = "setup"; renderWelcome(); }
+  } catch {
+    app.innerHTML = `<section class="screen center"><h1>אין גישה לאחסון</h1><p class="lead">הדפדפן חוסם שמירת נתונים. אם אתה בגלישה פרטית, פתח בחלון רגיל.</p></section>`;
+  }
+})();
+</script>
+</body>
+</html>
