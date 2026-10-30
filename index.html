@@ -153,9 +153,14 @@ button:focus-visible, select:focus-visible { outline: 3px solid var(--accent); o
 
 <script>
 "use strict";
-/* ========= אחסון (IndexedDB, במכשיר בלבד) ========= */
-const DB_NAME = "finance-tracker", STORE = "kv";
+/* ========= אחסון (במכשיר בלבד) =========
+   ראשי: IndexedDB. גיבוי: localStorage (אם IndexedDB חסום בדפדפן).
+   בשניהם הנתונים כבר מוצפנים לפני השמירה. */
+const DB_NAME = "finance-tracker", STORE = "kv", LS_PREFIX = "ft:";
+let backend = null;          // "idb" | "ls"
+let lastStorageError = "";
 let dbPromise = null;
+
 function openDB() {
   if (!dbPromise) dbPromise = new Promise((res, rej) => {
     try {
@@ -163,11 +168,12 @@ function openDB() {
       r.onupgradeneeded = () => r.result.createObjectStore(STORE);
       r.onsuccess = () => res(r.result);
       r.onerror = () => rej(r.error);
+      r.onblocked = () => rej(new Error("blocked"));
     } catch (e) { rej(e); }
   });
   return dbPromise;
 }
-async function kv(mode, fn) {
+async function idb(mode, fn) {
   const db = await openDB();
   return new Promise((res, rej) => {
     const tx = db.transaction(STORE, mode);
@@ -177,9 +183,39 @@ async function kv(mode, fn) {
     tx.onabort = () => rej(tx.error);
   });
 }
-const kvGet = k => kv("readonly", s => s.get(k));
-const kvSet = (k, v) => kv("readwrite", s => s.put(v, k));
-const kvClear = () => kv("readwrite", s => s.clear());
+const b64 = u8 => { let s = ""; u8.forEach(b => s += String.fromCharCode(b)); return btoa(s); };
+const unb64 = t => Uint8Array.from(atob(t), c => c.charCodeAt(0));
+const lsEncode = v => JSON.stringify(v, (k, x) => x instanceof Uint8Array ? { __u8: b64(x) } : x);
+const lsDecode = t => t == null ? undefined : JSON.parse(t, (k, x) => x && typeof x === "object" && "__u8" in x ? unb64(x.__u8) : x);
+
+async function pickBackend() {
+  const errs = [];
+  try {
+    if (!window.indexedDB) throw new Error("indexedDB missing");
+    await idb("readwrite", s => s.put(1, "__probe"));
+    await idb("readonly", s => s.get("__probe"));
+    backend = "idb"; return;
+  } catch (e) { errs.push("IDB: " + (e && (e.name || "") + " " + (e.message || e))); }
+  try {
+    localStorage.setItem(LS_PREFIX + "__probe", "1");
+    localStorage.removeItem(LS_PREFIX + "__probe");
+    backend = "ls"; return;
+  } catch (e) { errs.push("LS: " + (e && (e.name || "") + " " + (e.message || e))); }
+  lastStorageError = errs.join(" | ");
+  throw new Error(lastStorageError);
+}
+async function kvGet(k) {
+  if (backend === "idb") return idb("readonly", s => s.get(k));
+  return lsDecode(localStorage.getItem(LS_PREFIX + k));
+}
+async function kvSet(k, v) {
+  if (backend === "idb") return idb("readwrite", s => s.put(v, k));
+  localStorage.setItem(LS_PREFIX + k, lsEncode(v));
+}
+async function kvClear() {
+  if (backend === "idb") return idb("readwrite", s => s.clear());
+  Object.keys(localStorage).filter(k => k.startsWith(LS_PREFIX)).forEach(k => localStorage.removeItem(k));
+}
 
 /* ========= הצפנה =========
    מפתח נתונים אקראי (AES-GCM 256) מצפין את כל הנתונים.
@@ -589,16 +625,34 @@ if ("serviceWorker" in navigator && location.protocol === "https:") {
 }
 
 (async function boot() {
-  if (!window.crypto || !crypto.subtle || !window.indexedDB) {
-    app.innerHTML = `<section class="screen center"><h1>הדפדפן לא נתמך</h1><p class="lead">צריך Safari או Chrome עדכני, לא במצב גלישה פרטית.</p></section>`;
+  if (!window.crypto || !crypto.subtle) {
+    app.innerHTML = `<section class="screen center"><h1>הדפדפן לא נתמך</h1><p class="lead">צריך Safari או Chrome עדכני.</p></section>`;
+    return;
+  }
+  try {
+    await pickBackend();
+  } catch {
+    app.innerHTML = `
+      <section class="screen center">
+        <h1>אין גישה לאחסון</h1>
+        <p class="lead">הדפדפן חוסם שמירת נתונים באתר הזה. בדרך כלל הסיבה היא אחת מאלה:</p>
+        <div class="group" style="text-align:right;width:100%">
+          <div class="row"><span>גלישה פרטית: פתח בחלון רגיל</span></div>
+          <div class="row"><span>הגדרות ← אפליקציות ← Safari ← "חסום את כל העוגיות": לכבות</span></div>
+          <div class="row"><span>מצב נעילה (Lockdown Mode) פעיל</span></div>
+        </div>
+        <button class="btn" id="retry" type="button">נסה שוב</button>
+        <p class="footnote" style="direction:ltr">${esc(lastStorageError)}</p>
+      </section>`;
+    document.getElementById("retry").addEventListener("click", () => location.reload());
     return;
   }
   try {
     const vault = await kvGet("vault");
     if (vault) { state = "locked"; renderLock(); }
     else { state = "setup"; renderWelcome(); }
-  } catch {
-    app.innerHTML = `<section class="screen center"><h1>אין גישה לאחסון</h1><p class="lead">הדפדפן חוסם שמירת נתונים. אם אתה בגלישה פרטית, פתח בחלון רגיל.</p></section>`;
+  } catch (e) {
+    app.innerHTML = `<section class="screen center"><h1>שגיאה בקריאת הנתונים</h1><p class="footnote" style="direction:ltr">${esc((e && (e.name + " " + e.message)) || e)}</p><button class="btn" type="button" onclick="location.reload()">נסה שוב</button></section>`;
   }
 })();
 </script>
