@@ -143,10 +143,69 @@ button:focus-visible, select:focus-visible { outline: 3px solid var(--accent); o
   opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 60;
 }
 #toast.show { opacity: 1; }
+
+/* שלב 2 */
+.card.col { flex-direction: column; align-items: stretch; gap: 10px; }
+.field {
+  width: 100%; font: inherit; padding: 12px 14px; border-radius: 12px;
+  border: 1.5px solid var(--line); background: var(--bg); color: var(--ink);
+}
+.field:focus { outline: none; border-color: var(--accent); }
+.err { color: var(--danger); }
+.muted { color: var(--muted); }
+.cycles, .filters { display: flex; gap: 8px; overflow-x: auto; padding: 2px 2px 4px; scrollbar-width: none; }
+.cycles::-webkit-scrollbar, .filters::-webkit-scrollbar { display: none; }
+.cycles button {
+  flex: none; border: 0; border-radius: 14px; padding: 8px 14px; cursor: pointer; text-align: center;
+  background: var(--surface); box-shadow: 0 0 0 1px var(--line) inset; display: flex; flex-direction: column; line-height: 1.25;
+}
+.cycles button span { font-weight: 700; }
+.cycles button small { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.cycles button[aria-pressed="true"] { background: var(--accent); box-shadow: none; }
+.cycles button[aria-pressed="true"] span, .cycles button[aria-pressed="true"] small { color: var(--surface); }
+.filters button {
+  flex: none; border: 0; border-radius: 999px; padding: 6px 14px; cursor: pointer; font-size: 14px; font-weight: 600;
+  background: var(--surface); box-shadow: 0 0 0 1px var(--line) inset;
+}
+.filters button[aria-pressed="true"] { background: var(--ink); color: var(--bg); box-shadow: none; }
+.summary { background: var(--surface); border-radius: 20px; padding: 18px; box-shadow: 0 0 0 1px var(--line) inset; display: flex; flex-direction: column; gap: 8px; }
+.summary-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.badge-cal { background: #1b4f9c; color: #fff; border-radius: 6px; padding: 1px 8px; font-weight: 700; font-size: 13px; }
+.card-name { font-weight: 700; }
+.big { font-family: var(--font-display); font-size: 36px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.sub { color: var(--muted); font-size: 14px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.split { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 4px; }
+.split div { background: var(--bg); border-radius: 12px; padding: 8px 10px; display: flex; flex-direction: column; }
+.split small { color: var(--muted); font-size: 12px; }
+.split b { font-variant-numeric: tabular-nums; font-size: 15px; }
+.note { font-size: 14px; color: var(--muted); }
+.note b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.pill { display: inline-block; font-size: 12px; font-weight: 700; padding: 1px 8px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); white-space: nowrap; }
+.pill.ok { background: var(--accent-soft); color: var(--ok); }
+.pill.warn { background: color-mix(in srgb, #d98a00 18%, transparent); color: #a35f00; }
+:root[data-theme="dark"] .pill.warn { color: #ffbe55; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .pill.warn { color: #ffbe55; } }
+.txlist { display: flex; flex-direction: column; gap: 8px; }
+.day { font-size: 13px; font-weight: 700; color: var(--muted); margin: 8px 4px 0; }
+.tx { display: flex; justify-content: space-between; gap: 12px; padding: 12px 16px; border-top: 1px solid var(--line); }
+.tx:first-child { border-top: 0; }
+.tx-main { min-width: 0; }
+.tx-name { font-weight: 600; overflow-wrap: anywhere; }
+.tx-sub { font-size: 13px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.tx-amt { text-align: left; font-variant-numeric: tabular-nums; font-weight: 700; white-space: nowrap; display: flex; flex-direction: column; align-items: flex-end; }
+.tx-amt small { font-weight: 400; font-size: 12px; color: var(--muted); }
+#updateBar {
+  position: sticky; top: 0; z-index: 40; max-width: 480px; margin: 8px auto 0;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  background: var(--ink); color: var(--bg); border-radius: 14px; padding: 10px 14px; font-weight: 600;
+}
+#updateBar[hidden] { display: none; }
+#updateBar button { border: 0; border-radius: 10px; padding: 6px 14px; background: var(--accent); color: #fff; font-weight: 700; cursor: pointer; }
 @media (prefers-reduced-motion: reduce) { .shake { animation: none; } * { transition: none !important; } }
 </style>
 </head>
 <body>
+<div id="updateBar" hidden><span>גרסה חדשה זמינה</span><button id="doUpdate" type="button">עדכון</button></div>
 <div id="app"></div>
 <div id="cover" aria-hidden="true"><div class="logo">₪</div><div class="lead">מעקב הוצאות</div></div>
 <div id="toast" role="status" aria-live="polite"></div>
@@ -293,7 +352,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;",
 async function saveSettings() { await kvSet("settings", await encryptJSON(settings)); }
 
 function lock() {
-  dek = null; settings = null; hiddenAt = null;
+  dek = null; settings = null; data = null; hiddenAt = null;
   state = "locked";
   renderLock();
 }
@@ -392,6 +451,8 @@ function renderConfirm(first) {
         dek = await importDEK(raw); raw.fill(0);
         settings = { autoLock: 30, createdAt: new Date().toISOString() };
         await saveSettings();
+        data = emptyData();
+        await saveData();
         await setGuard({ failed: 0, lockedUntil: 0 });
         try { if (navigator.storage && navigator.storage.persist) await navigator.storage.persist(); } catch {}
         state = "unlocked";
@@ -427,6 +488,8 @@ async function renderLock() {
         await setGuard({ failed: 0, lockedUntil: 0 });
         try { settings = await decryptJSON(await kvGet("settings")); }
         catch { settings = { autoLock: 30 }; }
+        try { await loadData(); }
+        catch { data = emptyData(); toast("לא הצלחתי לקרוא את הנתונים השמורים"); }
         state = "unlocked";
         renderHome();
         return;
@@ -466,37 +529,471 @@ async function startCountdown(pad) {
 /* ========= בית ========= */
 const ICON_LOCK = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>`;
 const ICON_GEAR = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>`;
+const ICON_PLUS = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>`;
+
+const MONTHS = ["ינואר","פברואר","מרץ","אפריל","מאי","יוני","יולי","אוגוסט","ספטמבר","אוקטובר","נובמבר","דצמבר"];
+const ils = new Intl.NumberFormat("he-IL", { style: "currency", currency: "ILS", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmtMoney = (n, cur = "ILS") => cur === "ILS" ? ils.format(n)
+  : new Intl.NumberFormat("he-IL", { style: "currency", currency: cur }).format(n);
+const todayISO = () => new Date().toISOString().slice(0, 10);
+const ddmm = iso => `${+iso.slice(8, 10)}.${+iso.slice(5, 7)}`;
+const isOpen = st => st.chargeDate > todayISO();
+
+/* "יולי" = מה שחויב ב-10.8 (ההגדרה שלך: חודש לפי מועד החיוב) */
+function cycleLabel(chargeDate) {
+  const y = +chargeDate.slice(0, 4), m = +chargeDate.slice(5, 7);
+  const mi = (m + 10) % 12, yy = m === 1 ? y - 1 : y;
+  return yy === new Date().getFullYear() ? MONTHS[mi] : `${MONTHS[mi]} ${yy}`;
+}
+
+const TYPE_LABEL = { regular: "רגילה", installments: "תשלומים", standing: "הוראת קבע", cash: "משיכת מזומן", refund: "זיכוי", credit: "קרדיט", other: "אחר" };
+
+let selectedStatementId = null;
+let txFilter = "all";
 
 function autoLockLabel() {
   const o = AUTO_LOCK.find(a => a.s === settings.autoLock) || AUTO_LOCK[1];
   return o.s === 0 ? "מיידית" : `אחרי ${o.label}`;
 }
 
+function statementsSorted() {
+  return [...data.statements].sort((a, b) => b.chargeDate.localeCompare(a.chargeDate));
+}
+
 function renderHome() {
+  const sts = statementsSorted();
+  if (!sts.find(s => s.id === selectedStatementId)) selectedStatementId = sts[0] ? sts[0].id : null;
+  const st = sts.find(s => s.id === selectedStatementId);
+
   app.innerHTML = `
     <section class="screen">
       <div class="topbar">
         <h1>סקירה</h1>
         <div class="actions">
+          <button class="icon-btn" id="openImport" type="button" aria-label="ייבוא קובץ">${ICON_PLUS}</button>
           <button class="icon-btn" id="lockNow" type="button" aria-label="נעילה עכשיו">${ICON_LOCK}</button>
           <button class="icon-btn" id="openSettings" type="button" aria-label="הגדרות">${ICON_GEAR}</button>
         </div>
       </div>
-      <div class="stack">
-        <article class="card">
-          <div class="chip ok" aria-hidden="true">✓</div>
-          <div><h3>האפליקציה מאובטחת</h3>
-          <p>קוד גישה פעיל · נעילה אוטומטית ${esc(autoLockLabel())} · הנתונים מוצפנים במכשיר</p></div>
-        </article>
-        <article class="card">
-          <div class="chip" aria-hidden="true">⇩</div>
-          <div><h3>בקרוב: ייבוא מכאל</h3>
-          <p>בשלב 2 תבחר קובץ אקסל של כאל, והכרטיס וכל העסקאות יופיעו כאן. הקובץ נקרא במכשיר ולא נשלח לשום מקום.</p></div>
-        </article>
-      </div>
+      ${st ? homeWithData(sts, st) : homeEmpty()}
     </section>`;
+
   document.getElementById("lockNow").addEventListener("click", lock);
   document.getElementById("openSettings").addEventListener("click", renderSettings);
+  document.getElementById("openImport").addEventListener("click", renderImport);
+  const emptyBtn = document.getElementById("emptyImport");
+  if (emptyBtn) emptyBtn.addEventListener("click", renderImport);
+  document.querySelectorAll("[data-st]").forEach(b => b.addEventListener("click", () => {
+    selectedStatementId = b.dataset.st; renderHome();
+  }));
+  document.querySelectorAll("[data-filter]").forEach(b => b.addEventListener("click", () => {
+    txFilter = b.dataset.filter; renderHome();
+  }));
+  const sel = document.querySelector(".cycles [aria-pressed='true']");
+  if (sel) sel.scrollIntoView({ block: "nearest", inline: "center" });
+}
+
+function homeEmpty() {
+  return `
+    <div class="stack">
+      <article class="card">
+        <div class="chip ok" aria-hidden="true">✓</div>
+        <div><h3>האפליקציה מאובטחת</h3>
+        <p>קוד גישה פעיל · נעילה אוטומטית ${esc(autoLockLabel())} · הנתונים מוצפנים במכשיר</p></div>
+      </article>
+      <article class="card col">
+        <h3>עוד אין נתונים</h3>
+        <p>באפליקציית כאל בחר "ייצוא לאקסל" לכל חודש, ואז ייבא את הקבצים לכאן. אפשר לבחור כמה קבצים בבת אחת. הקבצים נקראים במכשיר ולא נשלחים לשום מקום.</p>
+        <button class="btn" id="emptyImport" type="button">ייבוא קובצי כאל</button>
+      </article>
+    </div>`;
+}
+
+function homeWithData(sts, st) {
+  const card = data.cards.find(c => c.id === st.cardId);
+  const tx = data.tx.filter(t => t.statementId === st.id);
+  const sumBy = pred => tx.filter(pred).reduce((a, t) => a + (t.charge || 0), 0);
+  const regular = sumBy(t => !t.immediate && !t.pending && !["installments", "standing", "refund"].includes(t.type));
+  const installments = sumBy(t => !t.immediate && t.type === "installments");
+  const standing = sumBy(t => !t.immediate && t.type === "standing");
+  const refunds = sumBy(t => !t.immediate && t.type === "refund");
+  const open = isOpen(st);
+
+  const filters = [
+    ["all", "הכול"], ["installments", "תשלומים"], ["standing", "הוראות קבע"], ["special", "מיוחדות"]
+  ];
+  const shown = tx.filter(t =>
+    txFilter === "all" ? true :
+    txFilter === "installments" ? !!t.installment :
+    txFilter === "standing" ? t.type === "standing" :
+    (t.immediate || t.pending || t.type === "refund" || t.type === "credit" || t.currency !== "ILS"));
+
+  const groups = {};
+  shown.forEach(t => (groups[t.date] = groups[t.date] || []).push(t));
+  const days = Object.keys(groups).sort().reverse();
+
+  return `
+    <div class="cycles" role="group" aria-label="בחירת חודש">
+      ${sts.map(s => `
+        <button type="button" data-st="${s.id}" aria-pressed="${s.id === st.id}">
+          <span>${esc(cycleLabel(s.chargeDate))}</span>
+          <small>${isOpen(s) ? "פתוח" : "חיוב " + ddmm(s.chargeDate)}</small>
+        </button>`).join("")}
+    </div>
+
+    <article class="summary">
+      <div class="summary-head">
+        <span class="badge-cal">כאל</span>
+        <span class="card-name">${esc(card ? card.nickname : "כרטיס")}</span>
+        ${open ? `<span class="pill warn">מחזור פתוח</span>` : ""}
+      </div>
+      <div class="big">${fmtMoney(st.total)}</div>
+      <div class="sub">${open ? "עד עכשיו, לחיוב ב-" : "חויב ב-"}${ddmm(st.chargeDate)} · ${tx.filter(t => !t.immediate).length} עסקאות
+        ${st.verified ? `<span class="pill ok">תואם לקובץ ✓</span>` : `<span class="pill warn">לא תואם לסכום בקובץ</span>`}</div>
+      <div class="split">
+        <div><small>רגילות</small><b>${fmtMoney(regular)}</b></div>
+        <div><small>תשלומים</small><b>${fmtMoney(installments)}</b></div>
+        <div><small>הוראות קבע</small><b>${fmtMoney(standing)}</b></div>
+      </div>
+      ${refunds ? `<div class="note">כולל זיכויים: ${fmtMoney(refunds)}</div>` : ""}
+      ${st.immediateTotal ? `<div class="note">בנוסף, חיוב מיידי (לא ב-10 לחודש): <b>${fmtMoney(st.immediateTotal)}</b></div>` : ""}
+      ${st.pendingTotal ? `<div class="note">בקליטה, עוד לא בסכום: <b>${fmtMoney(st.pendingTotal)}</b></div>` : ""}
+    </article>
+
+    <div class="filters" role="group" aria-label="סינון עסקאות">
+      ${filters.map(([k, l]) => `<button type="button" data-filter="${k}" aria-pressed="${k === txFilter}">${l}</button>`).join("")}
+    </div>
+
+    <div class="txlist">
+      ${days.length ? days.map(d => `
+        <div class="day">${new Date(d + "T12:00:00").toLocaleDateString("he-IL", { weekday: "long", day: "numeric", month: "numeric" })}</div>
+        <div class="group">${groups[d].map(txRow).join("")}</div>`).join("")
+        : `<p class="footnote">אין עסקאות בסינון הזה.</p>`}
+    </div>`;
+}
+
+function txRow(t) {
+  const chips = [];
+  if (t.installment) chips.push(`<span class="pill">${t.installment.n === 0 ? "קרדיט" : "תשלום " + t.installment.n + "/" + t.installment.of}</span>`);
+  if (t.type === "standing") chips.push(`<span class="pill">הוראת קבע</span>`);
+  if (t.immediate) chips.push(`<span class="pill warn">חיוב מיידי</span>`);
+  if (t.pending) chips.push(`<span class="pill warn">בקליטה</span>`);
+  if (t.type === "refund") chips.push(`<span class="pill ok">זיכוי</span>`);
+  if (t.type === "cash") chips.push(`<span class="pill">מזומן</span>`);
+
+  let main, sub = "";
+  if (t.pending || t.charge == null) {
+    main = `<span class="muted">${fmtMoney(t.amount, t.currency)}</span>`;
+    sub = t.pending ? "" : "יחויב בהמשך";
+  } else {
+    main = fmtMoney(t.charge);
+    if (t.currency !== "ILS") sub = `במקור ${fmtMoney(t.amount, t.currency)}`;
+    else if (t.installment && t.installment.n > 0 && Math.abs(t.amount - t.charge) > 0.009) sub = `מתוך ${fmtMoney(t.amount)}`;
+  }
+  return `
+    <div class="tx">
+      <div class="tx-main">
+        <div class="tx-name">${esc(t.merchant)}</div>
+        <div class="tx-sub">${t.branch ? esc(t.branch) : ""} ${chips.join(" ")}</div>
+      </div>
+      <div class="tx-amt">${main}${sub ? `<small>${sub}</small>` : ""}</div>
+    </div>`;
+}
+
+/* ========= קריאת קובצי Excel — במכשיר, בלי ספריות חיצוניות ========= */
+async function unzip(buf) {
+  const dv = new DataView(buf), u8 = new Uint8Array(buf), td8 = new TextDecoder();
+  let eocd = -1;
+  for (let i = u8.length - 22; i >= Math.max(0, u8.length - 65557); i--) {
+    if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) throw new Error("not-zip");
+  const count = dv.getUint16(eocd + 10, true);
+  let p = dv.getUint32(eocd + 16, true);
+  const files = {};
+  for (let n = 0; n < count; n++) {
+    if (dv.getUint32(p, true) !== 0x02014b50) throw new Error("bad-zip");
+    const method = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true);
+    const nlen = dv.getUint16(p + 28, true), elen = dv.getUint16(p + 30, true), clen = dv.getUint16(p + 32, true);
+    const lho = dv.getUint32(p + 42, true);
+    files[td8.decode(u8.subarray(p + 46, p + 46 + nlen))] = { method, csize, lho };
+    p += 46 + nlen + elen + clen;
+  }
+  return {
+    names: () => Object.keys(files),
+    async text(name) {
+      const f = files[name]; if (!f) return null;
+      const start = f.lho + 30 + dv.getUint16(f.lho + 26, true) + dv.getUint16(f.lho + 28, true);
+      const raw = u8.subarray(start, start + f.csize);
+      if (f.method === 0) return td8.decode(raw);
+      if (f.method !== 8) throw new Error("zip-method");
+      if (typeof DecompressionStream === "undefined") throw new Error("no-decompress");
+      const stream = new Blob([raw]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+      return td8.decode(new Uint8Array(await new Response(stream).arrayBuffer()));
+    }
+  };
+}
+
+async function readSheet(buf) {
+  const z = await unzip(buf);
+  const xml = t => new DOMParser().parseFromString(t, "application/xml");
+  const ss = [];
+  const sst = await z.text("xl/sharedStrings.xml");
+  if (sst) for (const si of xml(sst).getElementsByTagName("si")) {
+    ss.push([...si.getElementsByTagName("t")].map(t => t.textContent).join(""));
+  }
+  const fmts = {}, xfs = [];
+  const st = await z.text("xl/styles.xml");
+  if (st) {
+    const d = xml(st);
+    for (const f of d.getElementsByTagName("numFmt")) fmts[f.getAttribute("numFmtId")] = f.getAttribute("formatCode");
+    const cx = d.getElementsByTagName("cellXfs")[0];
+    if (cx) for (const x of cx.getElementsByTagName("xf")) xfs.push(fmts[x.getAttribute("numFmtId")] || "");
+  }
+  const names = z.names();
+  const sheet = names.includes("xl/worksheets/sheet1.xml") ? "xl/worksheets/sheet1.xml"
+    : names.find(n => /^xl\/worksheets\/[^/]+\.xml$/.test(n));
+  if (!sheet) throw new Error("no-sheet");
+  const doc = xml(await z.text(sheet));
+  const rows = [];
+  for (const r of doc.getElementsByTagName("row")) {
+    const row = [];
+    for (const c of r.getElementsByTagName("c")) {
+      const letters = (c.getAttribute("r") || "").replace(/\d+/g, "");
+      const col = [...letters].reduce((a, ch) => a * 26 + ch.charCodeAt(0) - 64, 0) - 1;
+      if (col < 0) continue;
+      const t = c.getAttribute("t");
+      const vEl = c.getElementsByTagName("v")[0];
+      let v = vEl ? vEl.textContent : null;
+      if (t === "s" && v != null) v = ss[Number(v)];
+      else if (t === "inlineStr") v = [...c.getElementsByTagName("t")].map(x => x.textContent).join("");
+      else if (v != null && t !== "str" && t !== "e" && t !== "b") v = Number(v);
+      row[col] = { v, fmt: xfs[Number(c.getAttribute("s") || 0)] || "" };
+    }
+    rows.push(row);
+  }
+  return rows;
+}
+
+const round2 = n => Math.round(n * 100) / 100;
+const parseNum = s => Number(String(s).replace(/[,\s₪]/g, ""));
+const serialToISO = n => new Date(Math.round((n - 25569) * 86400000)).toISOString().slice(0, 10);
+function currencyOf(fmt) {
+  if (/\[\$\$\]/.test(fmt)) return "USD";
+  if (/\[\$€/.test(fmt)) return "EUR";
+  if (/\[\$£/.test(fmt)) return "GBP";
+  return "ILS";
+}
+function normType(raw, charge) {
+  if (raw.includes("ביטול") || (charge != null && charge < 0)) return "refund";
+  if (raw.includes("תשלומים")) return "installments";
+  if (raw.includes("הוראת קבע")) return "standing";
+  if (raw.includes("מזומן")) return "cash";
+  if (raw.includes("קרדיט")) return "credit";
+  if (raw.includes("רגילה")) return "regular";
+  return "other";
+}
+
+/* פענוח קובץ ייצוא של כאל.
+   נשמרים רק: 4 ספרות אחרונות, סוג הכרטיס, מועד חיוב, סכומים ופרטי העסקאות.
+   שורת הכותרת (עם מספר החשבון) ושם הגיליון לא נשמרים בשום מקום. */
+function parseCal(rows) {
+  const textAt = i => rows[i] && rows[i][0] && typeof rows[i][0].v === "string" ? rows[i][0].v : "";
+  let last4 = null, product = "", chargeDate = null, total = null, immediateTotal = 0, pendingTotal = 0, headerIdx = -1;
+  for (let i = 0; i < Math.min(rows.length, 20); i++) {
+    const t = textAt(i);
+    let m;
+    if ((m = t.match(/המסתיים ב-?\s*(\d{4})/))) {
+      last4 = m[1];
+      const pm = t.match(/לכרטיס\s+(.+?)\s+המסתיים/);
+      if (pm) product = pm[1].slice(0, 40);
+    }
+    if ((m = t.match(/לחיוב ב-?\s*(\d{1,2})\/(\d{1,2})\/(\d{4})\s*:?\s*(-?[\d,.]+)/))) {
+      chargeDate = `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
+      total = parseNum(m[4]);
+    }
+    if ((m = t.match(/בחיוב מיידי\s*(-?[\d,.]+)/))) immediateTotal = parseNum(m[1]);
+    if ((m = t.match(/בתהליך קליטה\s*(-?[\d,.]+)/))) pendingTotal = parseNum(m[1]);
+    if (t.startsWith("תאריך")) { headerIdx = i; break; }
+  }
+  if (headerIdx < 0 || !chargeDate || !last4) throw new Error("not-cal");
+
+  const tx = [];
+  for (let i = headerIdx + 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r || !r[0] || typeof r[0].v !== "number") continue;
+    const cell = k => (r[k] && r[k].v != null && r[k].v !== "") ? r[k].v : null;
+    const notes = String(cell(6) || "").trim();
+    const typeRaw = String(cell(4) || "").trim();
+    const inst = notes.match(/תשלום\s+(\d+)\s+מתוך\s+(\d+)/);
+    const charge = cell(3) == null ? null : Number(cell(3));
+    tx.push({
+      date: serialToISO(r[0].v),
+      merchant: String(cell(1) || "").trim(),
+      amount: Number(cell(2)) || 0,
+      currency: currencyOf(r[2] ? r[2].fmt : ""),
+      charge,
+      typeRaw,
+      type: normType(typeRaw, charge),
+      branch: cell(5) ? String(cell(5)).trim() : "",
+      notes,
+      installment: inst ? { n: +inst[1], of: +inst[2] } : null,
+      pending: notes.includes("בקליטה"),
+      immediate: notes.includes("חיוב מיידי")
+    });
+  }
+  const sumCharge = round2(tx.filter(t => !t.pending && !t.immediate).reduce((a, t) => a + (t.charge || 0), 0));
+  return {
+    last4, product, chargeDate, total, immediateTotal, pendingTotal, tx, sumCharge,
+    verified: total != null && Math.abs(sumCharge - total) < 0.01
+  };
+}
+
+/* ========= נתונים (מוצפנים) ========= */
+let data = null;
+const emptyData = () => ({ v: 1, cards: [], statements: [], tx: [] });
+async function loadData() {
+  const box = await kvGet("data");
+  data = box ? await decryptJSON(box) : emptyData();
+}
+async function saveData() { await kvSet("data", await encryptJSON(data)); }
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : b64(rand(12)));
+
+/* ========= מסך ייבוא ========= */
+function renderImport() {
+  let parsed = [];   // [{name, ok, err, res}]
+  app.innerHTML = `
+    <section class="screen">
+      <div class="topbar">
+        <h1>ייבוא מכאל</h1>
+        <button class="btn link" id="cancel" type="button">ביטול</button>
+      </div>
+      <p class="lead" style="max-width:none">באפליקציית כאל בחר "ייצוא לאקסל" לכל חודש. אפשר לבחור כמה קבצים יחד. הקבצים נקראים כאן במכשיר. מספר החשבון לא נשמר, ושום דבר לא נשלח החוצה.</p>
+      <label class="btn secondary" for="file">בחירת קבצים</label>
+      <input id="file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" multiple hidden>
+      <div id="preview" class="stack"></div>
+      <button class="btn" id="save" type="button" hidden>שמירה</button>
+    </section>`;
+  document.getElementById("cancel").addEventListener("click", renderHome);
+  const input = document.getElementById("file");
+  const preview = document.getElementById("preview");
+  const saveBtn = document.getElementById("save");
+
+  input.addEventListener("change", async () => {
+    const files = [...input.files];
+    input.value = "";
+    if (!files.length) return;
+    preview.innerHTML = `<p class="footnote">קורא ${files.length} קבצים…</p>`;
+    parsed = [];
+    for (const f of files) {
+      try { parsed.push({ name: f.name, ok: true, res: parseCal(await readSheet(await f.arrayBuffer())) }); }
+      catch (e) {
+        const msg = e.message === "no-decompress" ? "הדפדפן ישן מדי לקריאת קובצי אקסל. עדכן את iOS."
+          : e.message === "not-cal" ? "הקובץ לא נראה כמו ייצוא לאקסל של כאל."
+          : "לא הצלחתי לקרוא את הקובץ.";
+        parsed.push({ name: f.name, ok: false, err: msg });
+      }
+    }
+    // קובץ כפול לאותו חיוב ואותו כרטיס: האחרון גובר
+    const seen = new Map();
+    parsed.filter(p => p.ok).forEach(p => seen.set(p.res.last4 + p.res.chargeDate, p));
+    parsed = parsed.filter(p => !p.ok || seen.get(p.res.last4 + p.res.chargeDate) === p);
+    parsed.sort((a, b) => (b.ok ? b.res.chargeDate : "").localeCompare(a.ok ? a.res.chargeDate : ""));
+    drawPreview();
+  });
+
+  function drawPreview() {
+    const newCards = [...new Set(parsed.filter(p => p.ok).map(p => p.res.last4))]
+      .filter(l4 => !data.cards.find(c => c.last4 === l4));
+    preview.innerHTML = `
+      ${newCards.map(l4 => {
+        const prod = (parsed.find(p => p.ok && p.res.last4 === l4) || {}).res.product || "";
+        return `
+        <div class="card col">
+          <h3>כרטיס חדש</h3>
+          <p>${esc(prod ? "כאל · " + prod : "כאל")}. איך לקרוא לו? אפשר לשנות בכל זמן בהגדרות.</p>
+          <input class="field" id="nick-${l4}" type="text" maxlength="30" value="הכרטיס שלי" aria-label="שם לכרטיס">
+        </div>`;
+      }).join("")}
+      ${parsed.map(p => p.ok ? `
+        <div class="card">
+          <div class="chip ${p.res.verified ? "ok" : ""}" aria-hidden="true">${p.res.verified ? "✓" : "!"}</div>
+          <div>
+            <h3>${esc(cycleLabel(p.res.chargeDate))} · חיוב ${ddmm(p.res.chargeDate)}</h3>
+            <p>${p.res.tx.length} עסקאות · ${fmtMoney(p.res.total)}
+              ${p.res.verified ? " · תואם לסכום בקובץ" : ` · <span class="err">הסכום לא תואם (${fmtMoney(p.res.sumCharge)})</span>`}
+              ${p.res.chargeDate > todayISO() ? " · מחזור פתוח" : ""}
+              ${data.statements.find(s => s.chargeDate === p.res.chargeDate && (data.cards.find(c => c.id === s.cardId) || {}).last4 === p.res.last4) ? " · יחליף ייבוא קודם" : ""}</p>
+          </div>
+        </div>` : `
+        <div class="card">
+          <div class="chip" aria-hidden="true">✕</div>
+          <div><h3>${esc(p.name)}</h3><p class="err">${esc(p.err)}</p></div>
+        </div>`).join("")}`;
+    saveBtn.hidden = !parsed.some(p => p.ok);
+  }
+
+  saveBtn.addEventListener("click", async () => {
+    saveBtn.disabled = true; saveBtn.textContent = "מצפין ושומר…";
+    let latest = null;
+    for (const p of parsed.filter(x => x.ok)) {
+      const r = p.res;
+      let card = data.cards.find(c => c.last4 === r.last4);
+      if (!card) {
+        const el = document.getElementById("nick-" + r.last4);
+        card = { id: uid(), issuer: "cal", last4: r.last4, product: r.product, nickname: (el && el.value.trim()) || "הכרטיס שלי" };
+        data.cards.push(card);
+      }
+      // כל קובץ הוא תמונת מצב מלאה של מחזור חיוב: מחליפים את הייבוא הקודם של אותו מחזור
+      const old = data.statements.find(s => s.cardId === card.id && s.chargeDate === r.chargeDate);
+      if (old) {
+        data.tx = data.tx.filter(t => t.statementId !== old.id);
+        data.statements = data.statements.filter(s => s !== old);
+      }
+      const stmt = {
+        id: uid(), cardId: card.id, chargeDate: r.chargeDate, total: r.total,
+        immediateTotal: r.immediateTotal, pendingTotal: r.pendingTotal,
+        verified: r.verified, importedAt: new Date().toISOString()
+      };
+      data.statements.push(stmt);
+      r.tx.forEach(t => data.tx.push({ ...t, id: uid(), statementId: stmt.id, cardId: card.id, category: null }));
+      if (!latest || stmt.chargeDate > latest.chargeDate) latest = stmt;
+    }
+    try {
+      await saveData();
+      selectedStatementId = latest ? latest.id : null;
+      txFilter = "all";
+      renderHome();
+      toast("הייבוא נשמר");
+    } catch {
+      saveBtn.disabled = false; saveBtn.textContent = "שמירה";
+      toast("השמירה נכשלה. נסה שוב");
+    }
+  });
+}
+
+/* ========= עדכוני גרסה ========= */
+const APP_VERSION = "2.0.0";
+let lastUpdateCheck = 0;
+async function checkForUpdate(manual = false) {
+  lastUpdateCheck = Date.now();
+  try {
+    const r = await fetch("version.json?t=" + Date.now(), { cache: "no-store" });
+    if (!r.ok) throw new Error("http");
+    const { version } = await r.json();
+    const available = version !== APP_VERSION;
+    document.getElementById("updateBar").hidden = !available;
+    if (manual) toast(available ? `גרסה ${version} זמינה` : "האפליקציה מעודכנת");
+  } catch {
+    if (manual) toast("אין חיבור לבדיקה. נסה שוב מאוחר יותר");
+  }
+}
+async function applyUpdate() {
+  const btn = document.getElementById("doUpdate");
+  if (btn) { btn.disabled = true; btn.textContent = "מעדכן…"; }
+  try { const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration(); if (reg) await reg.update(); } catch {}
+  try { for (const k of await caches.keys()) await caches.delete(k); } catch {}
+  location.reload();
 }
 
 /* ========= הגדרות ========= */
@@ -525,6 +1022,21 @@ async function renderSettings() {
       </div>
       <p class="footnote">הנתונים מוצפנים במפתח שנגזר מהקוד שלך ונשמרים בדפדפן במכשיר הזה בלבד. אם תשכח את הקוד אי אפשר לשחזר אותם.</p>
 
+      <div class="section-label">כרטיסים</div>
+      <div class="group">
+        ${data.cards.length ? data.cards.map(c => `
+          <div class="row">
+            <div><div>${esc(c.nickname)}</div><div class="val">כאל${c.product ? " · " + esc(c.product) : ""} · ••${esc(c.last4)}</div></div>
+            <button class="btn link" type="button" data-rename="${c.id}">שינוי שם</button>
+          </div>`).join("") : `<div class="row"><span class="val">עוד לא יובאו כרטיסים</span></div>`}
+      </div>
+
+      <div class="section-label">גרסה</div>
+      <div class="group">
+        <div class="row"><span>גרסה מותקנת</span><span class="val" style="direction:ltr">${APP_VERSION}</span></div>
+        <div class="row"><button class="row-btn" id="checkUpdate" type="button"><span>בדיקת עדכונים</span><span class="val">‹</span></button></div>
+      </div>
+
       <div class="section-label">בדיקות</div>
       <div class="group"><div class="row" style="display:block">
         <button class="btn danger" id="wipe" type="button">מחיקת כל הנתונים והתחלה מחדש</button>
@@ -538,6 +1050,24 @@ async function renderSettings() {
     toast("נשמר");
   }));
   document.getElementById("changeCode").addEventListener("click", () => renderChangeCurrent());
+  document.getElementById("checkUpdate").addEventListener("click", () => checkForUpdate(true));
+  document.querySelectorAll("[data-rename]").forEach(btn => btn.addEventListener("click", () => {
+    const card = data.cards.find(c => c.id === btn.dataset.rename);
+    const row = btn.closest(".row");
+    row.innerHTML = `
+      <input class="field" type="text" maxlength="30" value="${esc(card.nickname)}" aria-label="שם הכרטיס">
+      <button class="btn link" type="button">שמירה</button>`;
+    const field = row.querySelector("input");
+    field.focus(); field.select();
+    const commit = async () => {
+      card.nickname = field.value.trim() || card.nickname;
+      await saveData();
+      toast("השם עודכן");
+      renderSettings();
+    };
+    row.querySelector("button").addEventListener("click", commit);
+    field.addEventListener("keydown", e => { if (e.key === "Enter") commit(); });
+  }));
   const wipe = document.getElementById("wipe");
   wipe.addEventListener("click", async () => {
     if (!wipe.dataset.armed) {
@@ -547,7 +1077,7 @@ async function renderSettings() {
       return;
     }
     await kvClear();
-    dek = null; settings = null; state = "setup";
+    dek = null; settings = null; data = null; state = "setup";
     renderWelcome();
   });
 }
@@ -614,6 +1144,7 @@ function onVisible() {
   if (state === "unlocked" && hiddenAt && settings && Date.now() - hiddenAt >= settings.autoLock * 1000) lock();
   hiddenAt = null;
   cover.classList.remove("show");
+  if (Date.now() - lastUpdateCheck > 10 * 60 * 1000) checkForUpdate();
 }
 document.addEventListener("visibilitychange", () => document.hidden ? onHidden() : onVisible());
 window.addEventListener("pagehide", onHidden);
@@ -624,7 +1155,10 @@ if ("serviceWorker" in navigator && location.protocol === "https:") {
   navigator.serviceWorker.register("sw.js").catch(() => {});
 }
 
+document.getElementById("doUpdate").addEventListener("click", applyUpdate);
+
 (async function boot() {
+  checkForUpdate();
   if (!window.crypto || !crypto.subtle) {
     app.innerHTML = `<section class="screen center"><h1>הדפדפן לא נתמך</h1><p class="lead">צריך Safari או Chrome עדכני.</p></section>`;
     return;
