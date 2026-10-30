@@ -201,6 +201,45 @@ button:focus-visible, select:focus-visible { outline: 3px solid var(--accent); o
 }
 #updateBar[hidden] { display: none; }
 #updateBar button { border: 0; border-radius: 10px; padding: 6px 14px; background: var(--accent); color: #fff; font-weight: 700; cursor: pointer; }
+
+/* שלב 3א */
+:root { --c1: #0d6b52; --c2: #2f7fb8; --c3: #c07a12; --c4: #8a8f8d; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --c1: #4cc79f; --c2: #6cb4ee; --c3: #f0ad4e; --c4: #9aa8a2; } }
+:root[data-theme="dark"] { --c1: #4cc79f; --c2: #6cb4ee; --c3: #f0ad4e; --c4: #9aa8a2; }
+.mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; direction: ltr; letter-spacing: .04em; }
+.review-bar {
+  display: flex; align-items: center; gap: 10px; width: 100%; border: 0; cursor: pointer; text-align: right;
+  background: color-mix(in srgb, #d98a00 16%, var(--surface)); border-radius: 14px; padding: 12px 14px; font-weight: 700;
+}
+.review-bar span:nth-child(2) { flex: 1; }
+.review-bar .count { background: #d98a00; color: #fff; border-radius: 999px; min-width: 28px; padding: 2px 8px; text-align: center; font-variant-numeric: tabular-nums; }
+.cats { display: flex; flex-direction: column; gap: 4px; }
+.catrow {
+  display: grid; grid-template-columns: minmax(0, 9.5em) 1fr auto; align-items: center; gap: 10px;
+  border: 0; background: none; padding: 8px 6px; border-radius: 10px; cursor: pointer; text-align: right; width: 100%;
+}
+.catrow[aria-pressed="true"] { background: var(--bg); }
+.catrow b { font-variant-numeric: tabular-nums; font-size: 15px; }
+.catname { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; font-size: 15px; }
+.catname i, .catchip i { width: 10px; height: 10px; border-radius: 3px; flex: none; display: inline-block; }
+.bar { height: 8px; background: var(--bg); border-radius: 99px; overflow: hidden; }
+.bar span { display: block; height: 100%; border-radius: 99px; }
+.catchip { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; color: var(--muted); }
+button.tx { width: 100%; border: 0; border-top: 1px solid var(--line); background: none; cursor: pointer; text-align: right; font: inherit; color: inherit; }
+.group button.tx:first-child { border-top: 0; }
+button.tx:active { background: var(--bg); }
+.tx-main, .tx-name, .tx-sub { display: block; }
+.tx-sub { display: flex; }
+.check { display: flex; gap: 10px; align-items: flex-start; background: var(--surface); border-radius: 14px; padding: 12px 14px; box-shadow: 0 0 0 1px var(--line) inset; font-size: 15px; }
+.check input { width: 20px; height: 20px; accent-color: var(--accent); margin-top: 2px; flex: none; }
+.row.head { background: var(--bg); }
+.subgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; padding: 12px 14px 14px; }
+.subbtn { border: 0; border-radius: 10px; padding: 10px 8px; cursor: pointer; font-weight: 600; font-size: 15px; background: var(--bg); color: var(--ink); }
+.subbtn[aria-pressed="true"] { background: var(--accent); color: var(--surface); }
+.sel { font: inherit; font-size: 14px; padding: 6px 8px; border-radius: 10px; border: 1.5px solid var(--line); background: var(--bg); color: var(--ink); max-width: 58%; }
+.rk { background: var(--surface); border-radius: 14px; padding: 18px; font-size: 20px; text-align: center; box-shadow: 0 0 0 1.5px var(--accent) inset; overflow-wrap: anywhere; user-select: all; -webkit-user-select: all; }
+.danger-card { box-shadow: 0 0 0 1.5px var(--danger) inset; }
+.danger-card label { font-size: 15px; }
 @media (prefers-reduced-motion: reduce) { .shake { animation: none; } * { transition: none !important; } }
 </style>
 </head>
@@ -212,11 +251,16 @@ button:focus-visible, select:focus-visible { outline: 3px solid var(--accent); o
 
 <script>
 "use strict";
+/* ============================================================
+   מעקב הוצאות — אפליקציית ווב אישית. כל הנתונים במכשיר בלבד, מוצפנים.
+   ============================================================ */
+const APP_VERSION = "3.0.0";
+
 /* ========= אחסון (במכשיר בלבד) =========
    ראשי: IndexedDB. גיבוי: localStorage (אם IndexedDB חסום בדפדפן).
    בשניהם הנתונים כבר מוצפנים לפני השמירה. */
 const DB_NAME = "finance-tracker", STORE = "kv", LS_PREFIX = "ft:";
-let backend = null;          // "idb" | "ls"
+let backend = null;
 let lastStorageError = "";
 let dbPromise = null;
 
@@ -278,32 +322,58 @@ async function kvClear() {
 
 /* ========= הצפנה =========
    מפתח נתונים אקראי (AES-GCM 256) מצפין את כל הנתונים.
-   המפתח הזה עצמו שמור מוצפן במפתח שנגזר מקוד הגישה (PBKDF2-SHA256).
-   הקוד לא נשמר בשום מקום; קוד שגוי פשוט לא מצליח לפענח. */
-const ITERATIONS = 310000;
+   עותקים "עטופים" של המפתח הזה נשמרים בכספת — כל עותק נפתח בדרך אחרת:
+   קוד גישה (PBKDF2), Face ID (Passkey + PRF), או מפתח שחזור.
+   מספיק אחד מהם כדי לפתוח. שום קוד לא נשמר. */
+const ITERATIONS = 310000, RECOVERY_ITERATIONS = 100000;
 const te = new TextEncoder(), td = new TextDecoder();
 const rand = n => crypto.getRandomValues(new Uint8Array(n));
 
-async function deriveKEK(code, salt, iterations) {
-  const base = await crypto.subtle.importKey("raw", te.encode(code), "PBKDF2", false, ["deriveKey"]);
-  return crypto.subtle.deriveKey(
-    { name: "PBKDF2", salt, iterations, hash: "SHA-256" },
+async function deriveKEK(secret, salt, iterations) {
+  const base = await crypto.subtle.importKey("raw", te.encode(secret), "PBKDF2", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey({ name: "PBKDF2", salt, iterations, hash: "SHA-256" },
+    base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+}
+async function prfKEK(prfOut) {
+  const base = await crypto.subtle.importKey("raw", prfOut, "HKDF", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey({ name: "HKDF", hash: "SHA-256", salt: new Uint8Array(32), info: te.encode("finance-tracker prf v1") },
     base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
 }
 const importDEK = raw => crypto.subtle.importKey("raw", raw, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
 
-async function wrapAndStore(code, raw) {
-  const salt = rand(16), iv = rand(12);
-  const kek = await deriveKEK(code, salt, ITERATIONS);
-  const wrapped = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, kek, raw));
-  await kvSet("vault", { v: 1, salt, iterations: ITERATIONS, iv, wrapped });
-}
-async function unwrapRaw(code) {
+async function getVault() {
   const v = await kvGet("vault");
   if (!v) return null;
-  const kek = await deriveKEK(code, v.salt, v.iterations);
-  try { return new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv: v.iv }, kek, v.wrapped)); }
+  if (v.wraps) return v;
+  return { v: 2, wraps: [{ kind: "code", salt: v.salt, iterations: v.iterations, iv: v.iv, wrapped: v.wrapped }] };
+}
+const hasWrap = (vault, kind) => !!(vault && vault.wraps.find(w => w.kind === kind));
+async function putWrap(entry) {
+  const v = (await getVault()) || { v: 2, wraps: [] };
+  v.wraps = v.wraps.filter(w => w.kind !== entry.kind).concat(entry);
+  await kvSet("vault", v);
+}
+async function removeWrap(kind) {
+  const v = await getVault(); if (!v) return;
+  v.wraps = v.wraps.filter(w => w.kind !== kind);
+  await kvSet("vault", v);
+}
+async function makeWrap(kind, kek, raw, extra) {
+  const iv = rand(12);
+  const wrapped = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, kek, raw));
+  return { kind, iv, wrapped, ...extra };
+}
+async function tryUnwrap(kek, w) {
+  try { return new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv: w.iv }, kek, w.wrapped)); }
   catch { return null; }
+}
+async function wrapAndStore(code, raw) {
+  const salt = rand(16);
+  await putWrap(await makeWrap("code", await deriveKEK(code, salt, ITERATIONS), raw, { salt, iterations: ITERATIONS }));
+}
+async function unwrapRaw(code) {
+  const v = await getVault(); const w = v && v.wraps.find(x => x.kind === "code");
+  return w ? tryUnwrap(await deriveKEK(code, w.salt, w.iterations), w) : null;
 }
 async function encryptJSON(obj) {
   const iv = rand(12);
@@ -313,6 +383,65 @@ async function encryptJSON(obj) {
 async function decryptJSON(box) {
   const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: box.iv }, dek, box.ct);
   return JSON.parse(td.decode(pt));
+}
+
+/* ========= מפתח שחזור ========= */
+const RK_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; // בלי 0/O/1/I/L
+function newRecoveryKey() {
+  const bytes = rand(28);
+  const chars = [...bytes].map(b => RK_ALPHABET[b % RK_ALPHABET.length]).join("");
+  return chars.match(/.{4}/g).join("-");          // 7 קבוצות של 4 ≈ 138 ביט
+}
+async function storeRecovery(key, raw) {
+  const salt = rand(16);
+  await putWrap(await makeWrap("recovery", await deriveKEK(key, salt, RECOVERY_ITERATIONS), raw, { salt, iterations: RECOVERY_ITERATIONS }));
+}
+async function unwrapWithRecovery(input) {
+  const v = await getVault(); const w = v && v.wraps.find(x => x.kind === "recovery");
+  if (!w) return null;
+  const cleaned = input.toUpperCase().replace(/[^A-Z0-9]/g, "").match(/.{1,4}/g)?.join("-") || "";
+  return tryUnwrap(await deriveKEK(cleaned, w.salt, w.iterations), w);
+}
+
+/* ========= Face ID (Passkey עם הרחבת PRF) ========= */
+async function faceIdAvailable() {
+  try {
+    return !!(window.PublicKeyCredential && PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable
+      && await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable());
+  } catch { return false; }
+}
+async function prfEvaluate(credId, prfSalt) {
+  const a = await navigator.credentials.get({ publicKey: {
+    challenge: rand(32), rpId: location.hostname, timeout: 60000, userVerification: "required",
+    allowCredentials: [{ type: "public-key", id: credId }],
+    extensions: { prf: { eval: { first: prfSalt } } }
+  }});
+  const r = a && a.getClientExtensionResults().prf;
+  if (!r || !r.results || !r.results.first) throw new Error("no-prf");
+  return new Uint8Array(r.results.first);
+}
+async function enableFaceId(raw) {
+  const prfSalt = rand(32);
+  const cred = await navigator.credentials.create({ publicKey: {
+    rp: { name: "מעקב הוצאות", id: location.hostname },
+    user: { id: rand(16), name: "מעקב הוצאות", displayName: "מעקב הוצאות" },
+    challenge: rand(32), timeout: 60000,
+    pubKeyCredParams: [{ type: "public-key", alg: -7 }, { type: "public-key", alg: -257 }],
+    authenticatorSelection: { authenticatorAttachment: "platform", residentKey: "required", userVerification: "required" },
+    extensions: { prf: { eval: { first: prfSalt } } }
+  }});
+  const credId = new Uint8Array(cred.rawId);
+  const ext = cred.getClientExtensionResults().prf;
+  if (ext && ext.enabled === false) throw new Error("no-prf");
+  let out = ext && ext.results && ext.results.first ? new Uint8Array(ext.results.first) : null;
+  if (!out) out = await prfEvaluate(credId, prfSalt);    // Safari מחזיר את התוצאה רק בכניסה
+  await putWrap(await makeWrap("prf", await prfKEK(out), raw, { credId, prfSalt }));
+}
+async function unwrapWithFaceId() {
+  const v = await getVault(); const w = v && v.wraps.find(x => x.kind === "prf");
+  if (!w) return null;
+  const out = await prfEvaluate(w.credId, w.prfSalt);
+  return tryUnwrap(await prfKEK(out), w);
 }
 
 /* ========= קוד גישה: חוזק והשהיות ========= */
@@ -333,6 +462,7 @@ const setGuard = g => kvSet("guard", g);
 /* ========= מצב האפליקציה ========= */
 let dek = null;            // מפתח הנתונים — קיים בזיכרון רק כשהאפליקציה פתוחה
 let settings = null;
+let data = null;
 let hiddenAt = null;
 let state = "loading";     // setup | locked | unlocked
 const AUTO_LOCK = [
@@ -345,9 +475,12 @@ const cover = document.getElementById("cover");
 function toast(msg) {
   const t = document.getElementById("toast");
   t.textContent = msg; t.classList.add("show");
-  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("show"), 2200);
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove("show"), 2400);
 }
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const screen = (inner, cls = "") => { app.innerHTML = `<section class="screen ${cls}">${inner}</section>`; window.scrollTo(0, 0); };
+const topbar = (title, backLabel = "חזרה", backId = "back") =>
+  `<div class="topbar"><h1>${esc(title)}</h1><button class="btn link" id="${backId}" type="button">${esc(backLabel)}</button></div>`;
 
 async function saveSettings() { await kvSet("settings", await encryptJSON(settings)); }
 
@@ -355,6 +488,15 @@ function lock() {
   dek = null; settings = null; data = null; hiddenAt = null;
   state = "locked";
   renderLock();
+}
+
+async function finishUnlock(raw) {
+  dek = await importDEK(raw); raw.fill(0);
+  await setGuard({ failed: 0, lockedUntil: 0 });
+  try { settings = await decryptJSON(await kvGet("settings")); } catch { settings = { autoLock: 30 }; }
+  try { await loadData(); } catch { data = emptyData(); toast("לא הצלחתי לקרוא את הנתונים השמורים"); }
+  state = "unlocked";
+  renderHome();
 }
 
 /* ========= רכיב מקלדת קוד ========= */
@@ -400,34 +542,53 @@ function mountPad(host, { title, message = "", error = false, onComplete, extraK
     code += d; paint();
     if (code.length === CODE_LEN) {
       const entered = code;
-      setTimeout(async () => {
-        code = ""; paint();
-        await onComplete(entered, ctl);
-      }, 120);
+      setTimeout(async () => { code = ""; paint(); await onComplete(entered, ctl); }, 120);
     }
   };
   host.querySelectorAll("[data-d]").forEach(b => b.addEventListener("click", () => press(b.dataset.d)));
   del.addEventListener("click", () => { if (!busy && code) { code = code.slice(0, -1); paint(); } });
-  if (extraKey) host.querySelector("[data-x]").addEventListener("click", extraKey.onClick);
+  if (extraKey) host.querySelector("[data-x]").addEventListener("click", () => extraKey.onClick(ctl));
   paint();
   return ctl;
 }
 
+/* מקלדת לאישור קוד לפני פעולה רגישה. מחזירה את מפתח הנתונים הגולמי. */
+function renderVerifyCode({ title, onCancel, onOk }) {
+  screen(`<div id="host" class="center-col"></div>`, "center");
+  mountPad(document.getElementById("host"), {
+    title,
+    extraKey: { label: "ביטול", onClick: onCancel },
+    onComplete: async (code, pad) => {
+      const g = await getGuard();
+      if (g.lockedUntil > Date.now()) { pad.setMessage("יותר מדי ניסיונות. נסה שוב מאוחר יותר", true); return; }
+      pad.setBusy(true); pad.setMessage("בודק…");
+      const raw = await unwrapRaw(code);
+      pad.setBusy(false);
+      if (!raw) {
+        const failed = g.failed + 1, wait = delayFor(failed);
+        await setGuard({ failed, lockedUntil: wait ? Date.now() + wait : 0 });
+        pad.shake(); pad.setMessage("קוד שגוי", true);
+        return;
+      }
+      await setGuard({ failed: 0, lockedUntil: 0 });
+      onOk(raw, code);
+    }
+  });
+}
+
 /* ========= הגדרה ראשונית ========= */
 function renderWelcome() {
-  app.innerHTML = `
-    <section class="screen center">
-      <div class="logo" aria-hidden="true">₪</div>
-      <h1>ברוך הבא</h1>
-      <p class="lead">לפני שמתחילים נגדיר קוד גישה בן 6 ספרות. כל הנתונים יישמרו במכשיר הזה בלבד, מוצפנים בקוד שלך. בלי הקוד אי אפשר לקרוא אותם.</p>
-      <div style="flex:1"></div>
-      <button class="btn" id="start" type="button">יצירת קוד גישה</button>
-    </section>`;
+  screen(`
+    <div class="logo" aria-hidden="true">₪</div>
+    <h1>ברוך הבא</h1>
+    <p class="lead">לפני שמתחילים נגדיר קוד גישה בן 6 ספרות. כל הנתונים יישמרו במכשיר הזה בלבד, מוצפנים בקוד שלך. בלי הקוד אי אפשר לקרוא אותם.</p>
+    <div style="flex:1"></div>
+    <button class="btn" id="start" type="button">יצירת קוד גישה</button>`, "center");
   document.getElementById("start").addEventListener("click", () => renderCreate());
 }
 
 function renderCreate(message = "6 ספרות", error = false) {
-  app.innerHTML = `<section class="screen center" id="host"></section>`;
+  screen(`<div id="host"></div>`, "center");
   mountPad(document.getElementById("host"), {
     title: "בחר קוד גישה", message, error,
     onComplete: (code, pad) => {
@@ -438,7 +599,7 @@ function renderCreate(message = "6 ספרות", error = false) {
 }
 
 function renderConfirm(first) {
-  app.innerHTML = `<section class="screen center" id="host"></section>`;
+  screen(`<div id="host"></div>`, "center");
   mountPad(document.getElementById("host"), {
     title: "הזן שוב את הקוד",
     extraKey: { label: "חזרה", onClick: () => renderCreate() },
@@ -458,7 +619,7 @@ function renderConfirm(first) {
         state = "unlocked";
         renderHome();
         toast("הקוד נשמר");
-      } catch (e) {
+      } catch {
         pad.setBusy(false);
         pad.setMessage("השמירה נכשלה. ייתכן שהדפדפן חוסם אחסון (למשל בגלישה פרטית).", true);
       }
@@ -470,30 +631,24 @@ function renderConfirm(first) {
 let lockTimer = null;
 async function renderLock() {
   clearInterval(lockTimer);
-  app.innerHTML = `
-    <section class="screen center">
-      <div class="logo" aria-hidden="true">₪</div>
-      <div id="host"></div>
-    </section>`;
+  const vault = await getVault();
+  const hasFace = hasWrap(vault, "prf");
+  screen(`
+    <div class="logo" aria-hidden="true">₪</div>
+    <div id="host"></div>
+    <button class="btn link" id="forgot" type="button">שכחתי את הקוד</button>`, "center");
+  document.getElementById("forgot").addEventListener("click", () => renderForgot(hasWrap(vault, "recovery")));
+
   const pad = mountPad(document.getElementById("host"), {
     title: "הזן קוד גישה",
+    extraKey: hasFace ? { label: "Face ID", onClick: p => faceUnlock(p) } : null,
     onComplete: async (code, pad) => {
       const g = await getGuard();
       if (g.lockedUntil > Date.now()) return;
       pad.setBusy(true); pad.setMessage("בודק…");
       const raw = await unwrapRaw(code);
       pad.setBusy(false);
-      if (raw) {
-        dek = await importDEK(raw); raw.fill(0);
-        await setGuard({ failed: 0, lockedUntil: 0 });
-        try { settings = await decryptJSON(await kvGet("settings")); }
-        catch { settings = { autoLock: 30 }; }
-        try { await loadData(); }
-        catch { data = emptyData(); toast("לא הצלחתי לקרוא את הנתונים השמורים"); }
-        state = "unlocked";
-        renderHome();
-        return;
-      }
+      if (raw) { await finishUnlock(raw); return; }
       const failed = g.failed + 1;
       const wait = delayFor(failed);
       await setGuard({ failed, lockedUntil: wait ? Date.now() + wait : 0 });
@@ -505,7 +660,19 @@ async function renderLock() {
       }
     }
   });
+  if (hasFace) pad.setMessage("לחץ על Face ID או הזן קוד");
   startCountdown(pad);
+}
+async function faceUnlock(pad) {
+  pad.setBusy(true); pad.setMessage("ממתין ל-Face ID…");
+  try {
+    const raw = await unwrapWithFaceId();
+    if (raw) { await finishUnlock(raw); return; }
+    pad.setMessage("Face ID לא הצליח לפתוח. הזן קוד", true);
+  } catch (e) {
+    pad.setMessage(e && e.name === "NotAllowedError" ? "Face ID בוטל. אפשר לנסות שוב או להזין קוד" : "Face ID לא זמין כרגע. הזן קוד", !(e && e.name === "NotAllowedError"));
+  }
+  pad.setBusy(false);
 }
 async function startCountdown(pad) {
   clearInterval(lockTimer);
@@ -526,6 +693,157 @@ async function startCountdown(pad) {
   lockTimer = setInterval(tick, 1000);
 }
 
+function renderForgot(hasRecovery) {
+  clearInterval(lockTimer);
+  if (hasRecovery) {
+    screen(`
+      ${topbar("שחזור גישה")}
+      <p class="lead" style="max-width:none">הזן את מפתח השחזור ששמרת (7 קבוצות של 4 תווים). אחר כך תבחר קוד גישה חדש.</p>
+      <input class="field mono" id="rk" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XXXX" aria-label="מפתח שחזור">
+      <p class="err" id="rkErr" hidden></p>
+      <button class="btn" id="rkGo" type="button">פתיחה</button>
+      <div style="flex:1"></div>
+      <button class="btn link" id="noKey" type="button">אין לי את המפתח</button>`);
+    document.getElementById("back").addEventListener("click", renderLock);
+    document.getElementById("noKey").addEventListener("click", () => renderForgot(false));
+    document.getElementById("rkGo").addEventListener("click", async () => {
+      const btn = document.getElementById("rkGo"), err = document.getElementById("rkErr");
+      btn.disabled = true; btn.textContent = "בודק…"; err.hidden = true;
+      const raw = await unwrapWithRecovery(document.getElementById("rk").value);
+      if (!raw) { btn.disabled = false; btn.textContent = "פתיחה"; err.textContent = "המפתח לא נכון. בדוק שהעתקת את כולו."; err.hidden = false; return; }
+      renderNewCode(raw, { afterSave: async r2 => { await finishUnlock(r2); toast("נבחר קוד חדש"); }, cancel: () => { raw.fill(0); renderLock(); } });
+    });
+    return;
+  }
+  screen(`
+    ${topbar("שכחתי את הקוד")}
+    <div class="card col">
+      <h3>אי אפשר לשחזר את הנתונים בלי הקוד</h3>
+      <p>הנתונים מוצפנים בקוד שלך, ולא הוגדר מפתח שחזור. האפשרות היחידה היא למחוק הכול ולהתחיל מחדש. את העסקאות אפשר לייבא שוב מכאל. מה שהזנת ידנית (סיווגים, כינויים) יימחק.</p>
+    </div>
+    <div style="flex:1"></div>
+    <button class="btn danger" id="toWipe" type="button">מחיקה והתחלה מחדש</button>`);
+  document.getElementById("back").addEventListener("click", renderLock);
+  document.getElementById("toWipe").addEventListener("click", () => renderWipeConfirm(renderLock));
+}
+
+/* מחיקה: דורשת להקליד את המילה "מחיקה" */
+function renderWipeConfirm(onCancel) {
+  screen(`
+    ${topbar("מחיקת כל הנתונים", "ביטול")}
+    <div class="card col danger-card">
+      <h3>הפעולה הזו מוחקת הכול לצמיתות</h3>
+      <p>כרטיסים, עסקאות, סיווגים, קוד הגישה, Face ID ומפתח השחזור. אי אפשר לבטל.</p>
+      <label for="confirmWord">כדי לאשר, הקלד: <b>מחיקה</b></label>
+      <input class="field" id="confirmWord" type="text" autocomplete="off" aria-describedby="confirmHelp">
+    </div>
+    <button class="btn danger" id="wipeNow" type="button" disabled>מחיקה לצמיתות</button>`);
+  document.getElementById("back").addEventListener("click", onCancel);
+  const field = document.getElementById("confirmWord"), btn = document.getElementById("wipeNow");
+  field.addEventListener("input", () => { btn.disabled = field.value.trim() !== "מחיקה"; });
+  btn.addEventListener("click", async () => {
+    await kvClear();
+    dek = null; settings = null; data = null; state = "setup";
+    renderWelcome();
+    toast("הכול נמחק");
+  });
+}
+
+/* בחירת קוד חדש (שינוי קוד / אחרי שחזור). raw = מפתח הנתונים הגולמי */
+function renderNewCode(raw, { afterSave, cancel, message = "", error = false }) {
+  screen(`<div id="host"></div>`, "center");
+  mountPad(document.getElementById("host"), {
+    title: "בחר קוד חדש", message, error,
+    extraKey: { label: "ביטול", onClick: cancel },
+    onComplete: (code, pad) => {
+      if (isTooSimple(code)) { pad.setMessage("הקוד פשוט מדי. בחר קוד אחר", true); pad.shake(); return; }
+      screen(`<div id="host"></div>`, "center");
+      mountPad(document.getElementById("host"), {
+        title: "הזן שוב את הקוד החדש",
+        extraKey: { label: "ביטול", onClick: cancel },
+        onComplete: async (again, pad2) => {
+          if (again !== code) { renderNewCode(raw, { afterSave, cancel, message: "הקודים לא תואמים. נסה שוב", error: true }); return; }
+          pad2.setBusy(true); pad2.setMessage("מצפין מחדש…");
+          try {
+            await wrapAndStore(again, raw);
+            await setGuard({ failed: 0, lockedUntil: 0 });
+            await afterSave(raw);
+          } catch {
+            pad2.setBusy(false); pad2.setMessage("השמירה נכשלה. נסה שוב", true);
+          }
+        }
+      });
+    }
+  });
+}
+
+/* ========= סיווג ========= */
+const CATS = [
+  { id: "home_fixed", name: "דירה – חשבונות קבועים", short: "חשבונות קבועים", color: "var(--c1)",
+    subs: [["rent", "שכר דירה"], ["arnona", "ארנונה"], ["water", "מים"], ["electricity", "חשמל"], ["vaad", "ועד בית"], ["internet", "אינטרנט"], ["water_bar", "בר מים"]] },
+  { id: "home_var", name: "דירה – משתנות חודשיות", short: "משתנות חודשיות", color: "var(--c2)",
+    subs: [["groceries", "סופר וקניות"], ["food", "אוכל ומשלוחים"], ["pets", "חתולים"], ["home_other", "אחר לבית"]] },
+  { id: "home_once", name: "דירה – לא קבועות", short: "דירה לא קבועות", color: "var(--c3)",
+    subs: [["furniture", "ריהוט"], ["housewares", "כלי בית ומוצרים"], ["home_misc", "אחר לדירה"]] },
+  { id: "other", name: "אחר", short: "אחר", color: "var(--c4)", subs: [["other", "אחר"]] }
+];
+const catTop = key => key ? CATS.find(c => c.id === key.split("/")[0]) : null;
+function catLabel(key, long = false) {
+  const c = catTop(key); if (!c) return "ממתין לסיווג";
+  const sub = c.subs.find(s => s[0] === key.split("/")[1]);
+  if (c.id === "other") return "אחר";
+  return long ? `${c.short} · ${sub ? sub[1] : ""}` : (sub ? sub[1] : c.short);
+}
+const ALL_SUBS = CATS.flatMap(c => c.subs.map(s => ({ key: `${c.id}/${s[0]}`, label: c.id === "other" ? "אחר" : `${c.short} · ${s[1]}` })));
+
+/* ענף של כאל ← קטגוריה. ריק = ממתין לסיווג */
+const DEFAULT_SECTOR = {
+  "מזון ומשקאות": "home_var/groceries",
+  "ריהוט ובית": "home_once/furniture",
+  "מסעדות": "other/other", "מזון מהיר": "other/other",
+  "אנרגיה": "other/other", "ביטוח ופיננסים": "other/other", "תקשורת ומחשבים": "other/other",
+  "רפואה ובריאות": "other/other", "אופנה": "other/other", "פנאי בילוי": "other/other",
+  "אירועים": "other/other", "ילדים": "other/other", "רכב ותחבורה": "other/other", "תעשיה ומכירות": "other/other",
+  "מוסדות": "", "שונות": ""
+};
+/* בתי עסק מוכרים. sure=false ← נכנס ל"ממתין לסיווג" עם הצעה */
+const BUILTIN = [
+  [/סופר ?פארם|super ?pharm|be ?פארם/i, "other/other", true],
+  [/וטרינר|vet|חיות|פט שופ|pet/i, "home_var/pets", true],
+  [/עיריי?ת .*שוטף|ארנונה|ריבית גישור/, "home_fixed/arnona", true],
+  [/עין כרמים|תאגיד המים|מי כרמיאל/, "home_fixed/water", true],
+  [/חברת החשמל|חברת חשמל/, "home_fixed/electricity", true],
+  [/מי עדן|tami ?4|תמי ?4|נביעות/i, "home_fixed/water_bar", true],
+  [/גילת טלקום|בזק|hot net|הוט נט|פרטנר תקשורת|סלקום/i, "home_fixed/internet", false],
+  [/ועד בית/, "home_fixed/vaad", true],
+  [/wolt|וולט|משלוח|משלוחה|תן ביס|10bis/i, "home_var/food", true],
+  [/מקס סטוק|max stock|זול סטוק|סטוק/i, "home_once/housewares", true],
+  [/רמי לוי|שופרסל|טיב טעם|יוחננוף|ויקטורי|אושר עד|קשת טעמים|מכולת|מרקט|סופר/, "home_var/groceries", true],
+  [/^bit$|^bit |העברה ב ?bit|paybox|pay box|פייבוקס/i, null, false],
+];
+const normMerchant = s => String(s).toLowerCase().replace(/\*.*$/, "").replace(/[\d"'׳״\-–_.,()]+/g, " ").replace(/\s+/g, " ").trim();
+const isTransferLike = t => t.type === "cash" || /^bit\b|העברה ב ?bit|paybox/i.test(t.merchant);
+
+function classify(t) {
+  const key = normMerchant(t.merchant);
+  const mr = data.rules.merchant[key];
+  if (mr !== undefined) return { cat: mr || null, sure: !!mr };
+  if (t.type === "cash") return { cat: null, sure: false };
+  for (const [re, cat, sure] of BUILTIN) if (re.test(t.merchant)) return { cat, sure: sure && !!cat };
+  const sector = t.branch || "";
+  const sm = sector in data.rules.sector ? data.rules.sector[sector] : DEFAULT_SECTOR[sector];
+  if (sm) return { cat: sm, sure: true };
+  return { cat: null, sure: false };
+}
+function reclassifyAll() {
+  for (const t of data.tx) {
+    if (t.catSource === "user") continue;
+    const r = classify(t);
+    t.category = r.cat; t.catSource = r.cat ? "auto" : null; t.needsReview = !r.sure;
+  }
+}
+const reviewQueue = () => data.tx.filter(t => !t.pending && (t.needsReview || !t.category));
+
 /* ========= בית ========= */
 const ICON_LOCK = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>`;
 const ICON_GEAR = `<svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>`;
@@ -539,56 +857,50 @@ const todayISO = () => new Date().toISOString().slice(0, 10);
 const ddmm = iso => `${+iso.slice(8, 10)}.${+iso.slice(5, 7)}`;
 const isOpen = st => st.chargeDate > todayISO();
 
-/* "יולי" = מה שחויב ב-10.8 (ההגדרה שלך: חודש לפי מועד החיוב) */
 function cycleLabel(chargeDate) {
   const y = +chargeDate.slice(0, 4), m = +chargeDate.slice(5, 7);
   const mi = (m + 10) % 12, yy = m === 1 ? y - 1 : y;
   return yy === new Date().getFullYear() ? MONTHS[mi] : `${MONTHS[mi]} ${yy}`;
 }
 
-const TYPE_LABEL = { regular: "רגילה", installments: "תשלומים", standing: "הוראת קבע", cash: "משיכת מזומן", refund: "זיכוי", credit: "קרדיט", other: "אחר" };
-
 let selectedStatementId = null;
 let txFilter = "all";
+let returnTo = () => renderHome();
 
 function autoLockLabel() {
   const o = AUTO_LOCK.find(a => a.s === settings.autoLock) || AUTO_LOCK[1];
   return o.s === 0 ? "מיידית" : `אחרי ${o.label}`;
 }
-
-function statementsSorted() {
-  return [...data.statements].sort((a, b) => b.chargeDate.localeCompare(a.chargeDate));
-}
+const statementsSorted = () => [...data.statements].sort((a, b) => b.chargeDate.localeCompare(a.chargeDate));
+const spent = t => (t.pending || t.charge == null) ? 0 : t.charge;   // כולל חיוב מיידי, בלי עסקאות בקליטה
 
 function renderHome() {
+  returnTo = () => renderHome();
   const sts = statementsSorted();
   if (!sts.find(s => s.id === selectedStatementId)) selectedStatementId = sts[0] ? sts[0].id : null;
   const st = sts.find(s => s.id === selectedStatementId);
+  const queue = reviewQueue().length;
 
-  app.innerHTML = `
-    <section class="screen">
-      <div class="topbar">
-        <h1>סקירה</h1>
-        <div class="actions">
-          <button class="icon-btn" id="openImport" type="button" aria-label="ייבוא קובץ">${ICON_PLUS}</button>
-          <button class="icon-btn" id="lockNow" type="button" aria-label="נעילה עכשיו">${ICON_LOCK}</button>
-          <button class="icon-btn" id="openSettings" type="button" aria-label="הגדרות">${ICON_GEAR}</button>
-        </div>
+  screen(`
+    <div class="topbar">
+      <h1>סקירה</h1>
+      <div class="actions">
+        <button class="icon-btn" id="openImport" type="button" aria-label="ייבוא קובץ">${ICON_PLUS}</button>
+        <button class="icon-btn" id="lockNow" type="button" aria-label="נעילה עכשיו">${ICON_LOCK}</button>
+        <button class="icon-btn" id="openSettings" type="button" aria-label="הגדרות">${ICON_GEAR}</button>
       </div>
-      ${st ? homeWithData(sts, st) : homeEmpty()}
-    </section>`;
+    </div>
+    ${queue ? `<button class="review-bar" id="openReview" type="button"><span class="count">${queue}</span><span>עסקאות ממתינות לסיווג</span><span aria-hidden="true">‹</span></button>` : ""}
+    ${st ? homeWithData(sts, st) : homeEmpty()}`);
 
   document.getElementById("lockNow").addEventListener("click", lock);
   document.getElementById("openSettings").addEventListener("click", renderSettings);
   document.getElementById("openImport").addEventListener("click", renderImport);
-  const emptyBtn = document.getElementById("emptyImport");
-  if (emptyBtn) emptyBtn.addEventListener("click", renderImport);
-  document.querySelectorAll("[data-st]").forEach(b => b.addEventListener("click", () => {
-    selectedStatementId = b.dataset.st; renderHome();
-  }));
-  document.querySelectorAll("[data-filter]").forEach(b => b.addEventListener("click", () => {
-    txFilter = b.dataset.filter; renderHome();
-  }));
+  const rv = document.getElementById("openReview"); if (rv) rv.addEventListener("click", renderReview);
+  const emptyBtn = document.getElementById("emptyImport"); if (emptyBtn) emptyBtn.addEventListener("click", renderImport);
+  document.querySelectorAll("[data-st]").forEach(b => b.addEventListener("click", () => { selectedStatementId = b.dataset.st; renderHome(); }));
+  document.querySelectorAll("[data-filter]").forEach(b => b.addEventListener("click", () => { txFilter = txFilter === b.dataset.filter && b.dataset.filter.startsWith("cat:") ? "all" : b.dataset.filter; renderHome(); }));
+  document.querySelectorAll("[data-tx]").forEach(b => b.addEventListener("click", () => renderCategorize(b.dataset.tx)));
   const sel = document.querySelector(".cycles [aria-pressed='true']");
   if (sel) sel.scrollIntoView({ block: "nearest", inline: "center" });
 }
@@ -612,25 +924,32 @@ function homeEmpty() {
 function homeWithData(sts, st) {
   const card = data.cards.find(c => c.id === st.cardId);
   const tx = data.tx.filter(t => t.statementId === st.id);
-  const sumBy = pred => tx.filter(pred).reduce((a, t) => a + (t.charge || 0), 0);
-  const regular = sumBy(t => !t.immediate && !t.pending && !["installments", "standing", "refund"].includes(t.type));
-  const installments = sumBy(t => !t.immediate && t.type === "installments");
-  const standing = sumBy(t => !t.immediate && t.type === "standing");
-  const refunds = sumBy(t => !t.immediate && t.type === "refund");
   const open = isOpen(st);
 
-  const filters = [
-    ["all", "הכול"], ["installments", "תשלומים"], ["standing", "הוראות קבע"], ["special", "מיוחדות"]
-  ];
+  const byCat = CATS.map(c => ({ c, sum: tx.filter(t => catTop(t.category) === c).reduce((a, t) => a + spent(t), 0) }));
+  const unc = tx.filter(t => !t.category).reduce((a, t) => a + spent(t), 0);
+  const maxSum = Math.max(1, ...byCat.map(x => x.sum), unc);
+  const totalSpent = tx.reduce((a, t) => a + spent(t), 0);
+
+  const filters = [["all", "הכול"], ["installments", "תשלומים"], ["standing", "הוראות קבע"], ["review", "לבדיקה"], ["special", "מיוחדות"]];
+  const activeCat = txFilter.startsWith("cat:") ? txFilter.slice(4) : null;
   const shown = tx.filter(t =>
     txFilter === "all" ? true :
+    activeCat ? (activeCat === "none" ? !t.category : catTop(t.category) && catTop(t.category).id === activeCat) :
     txFilter === "installments" ? !!t.installment :
     txFilter === "standing" ? t.type === "standing" :
+    txFilter === "review" ? (!t.pending && (t.needsReview || !t.category)) :
     (t.immediate || t.pending || t.type === "refund" || t.type === "credit" || t.currency !== "ILS"));
-
   const groups = {};
   shown.forEach(t => (groups[t.date] = groups[t.date] || []).push(t));
   const days = Object.keys(groups).sort().reverse();
+
+  const catRow = (id, label, color, sum) => `
+    <button class="catrow" type="button" data-filter="cat:${id}" aria-pressed="${activeCat === id}">
+      <span class="catname"><i style="background:${color}"></i>${esc(label)}</span>
+      <span class="bar"><span style="width:${(sum / maxSum * 100).toFixed(1)}%;background:${color}"></span></span>
+      <b>${fmtMoney(sum)}</b>
+    </button>`;
 
   return `
     <div class="cycles" role="group" aria-label="בחירת חודש">
@@ -650,14 +969,17 @@ function homeWithData(sts, st) {
       <div class="big">${fmtMoney(st.total)}</div>
       <div class="sub">${open ? "עד עכשיו, לחיוב ב-" : "חויב ב-"}${ddmm(st.chargeDate)} · ${tx.filter(t => !t.immediate).length} עסקאות
         ${st.verified ? `<span class="pill ok">תואם לקובץ ✓</span>` : `<span class="pill warn">לא תואם לסכום בקובץ</span>`}</div>
-      <div class="split">
-        <div><small>רגילות</small><b>${fmtMoney(regular)}</b></div>
-        <div><small>תשלומים</small><b>${fmtMoney(installments)}</b></div>
-        <div><small>הוראות קבע</small><b>${fmtMoney(standing)}</b></div>
-      </div>
-      ${refunds ? `<div class="note">כולל זיכויים: ${fmtMoney(refunds)}</div>` : ""}
       ${st.immediateTotal ? `<div class="note">בנוסף, חיוב מיידי (לא ב-10 לחודש): <b>${fmtMoney(st.immediateTotal)}</b></div>` : ""}
       ${st.pendingTotal ? `<div class="note">בקליטה, עוד לא בסכום: <b>${fmtMoney(st.pendingTotal)}</b></div>` : ""}
+    </article>
+
+    <article class="summary">
+      <div class="summary-head"><h3>לפי קטגוריה</h3><span class="note">סה״כ ${fmtMoney(totalSpent)}</span></div>
+      <div class="cats">
+        ${byCat.map(x => catRow(x.c.id, x.c.short, x.c.color, x.sum)).join("")}
+        ${unc ? catRow("none", "ממתין לסיווג", "var(--muted)", unc) : ""}
+      </div>
+      ${activeCat ? `<div class="note">מסונן לפי קטגוריה. לחץ שוב לביטול.</div>` : ""}
     </article>
 
     <div class="filters" role="group" aria-label="סינון עסקאות">
@@ -680,6 +1002,9 @@ function txRow(t) {
   if (t.pending) chips.push(`<span class="pill warn">בקליטה</span>`);
   if (t.type === "refund") chips.push(`<span class="pill ok">זיכוי</span>`);
   if (t.type === "cash") chips.push(`<span class="pill">מזומן</span>`);
+  const c = catTop(t.category);
+  const catChip = !t.category ? `<span class="pill warn">ממתין לסיווג</span>`
+    : `<span class="catchip"><i style="background:${c.color}"></i>${esc(catLabel(t.category))}${t.needsReview ? " ?" : ""}</span>`;
 
   let main, sub = "";
   if (t.pending || t.charge == null) {
@@ -691,13 +1016,71 @@ function txRow(t) {
     else if (t.installment && t.installment.n > 0 && Math.abs(t.amount - t.charge) > 0.009) sub = `מתוך ${fmtMoney(t.amount)}`;
   }
   return `
-    <div class="tx">
-      <div class="tx-main">
-        <div class="tx-name">${esc(t.merchant)}</div>
-        <div class="tx-sub">${t.branch ? esc(t.branch) : ""} ${chips.join(" ")}</div>
-      </div>
-      <div class="tx-amt">${main}${sub ? `<small>${sub}</small>` : ""}</div>
-    </div>`;
+    <button class="tx" type="button" data-tx="${t.id}">
+      <span class="tx-main">
+        <span class="tx-name">${esc(t.merchant)}</span>
+        <span class="tx-sub">${catChip} ${chips.join(" ")}</span>
+      </span>
+      <span class="tx-amt">${main}${sub ? `<small>${sub}</small>` : ""}</span>
+    </button>`;
+}
+
+/* ========= סיווג עסקה ========= */
+function renderCategorize(txId, fromReview = false) {
+  const t = data.tx.find(x => x.id === txId); if (!t) return returnTo();
+  const key = normMerchant(t.merchant);
+  const sameCount = data.tx.filter(x => normMerchant(x.merchant) === key).length;
+  const suggestion = t.category;
+  screen(`
+    ${topbar("סיווג", "ביטול")}
+    <article class="card col">
+      <h3>${esc(t.merchant)}</h3>
+      <p>${new Date(t.date + "T12:00:00").toLocaleDateString("he-IL")} · ${t.charge != null ? fmtMoney(t.charge) : fmtMoney(t.amount, t.currency)}
+        ${t.branch ? " · ענף בכאל: " + esc(t.branch) : ""}${t.installment ? ` · תשלום ${t.installment.n}/${t.installment.of}` : ""}${t.type === "cash" ? " · משיכת מזומן" : ""}</p>
+      ${t.needsReview && suggestion ? `<p class="note">הצעה: <b>${esc(catLabel(suggestion, true))}</b>. אשר או בחר אחרת.</p>` : ""}
+    </article>
+    ${sameCount > 1 || !isTransferLike(t) ? `
+    <label class="check">
+      <input type="checkbox" id="applyAll" ${isTransferLike(t) ? "" : "checked"}>
+      <span>להחיל על כל העסקאות מ"${esc(t.merchant.replace(/\*.*$/, ""))}"${sameCount > 1 ? ` (${sameCount})` : ""}, גם בייבוא הבא</span>
+    </label>` : ""}
+    <div class="stack">
+      ${CATS.map(c => `
+        <div class="group">
+          <div class="row head"><span class="catname"><i style="background:${c.color}"></i>${esc(c.name)}</span></div>
+          <div class="subgrid">
+            ${c.subs.map(([sid, sl]) => {
+              const k = `${c.id}/${sid}`;
+              return `<button type="button" class="subbtn" data-cat="${k}" aria-pressed="${t.category === k}">${esc(sl)}</button>`;
+            }).join("")}
+          </div>
+        </div>`).join("")}
+    </div>`);
+  document.getElementById("back").addEventListener("click", () => fromReview ? renderReview() : returnTo());
+  document.querySelectorAll("[data-cat]").forEach(b => b.addEventListener("click", async () => {
+    const cat = b.dataset.cat;
+    const all = document.getElementById("applyAll");
+    if (all && all.checked) {
+      data.rules.merchant[key] = cat;
+      data.tx.filter(x => normMerchant(x.merchant) === key && x.catSource !== "user")
+        .forEach(x => { x.category = cat; x.catSource = "auto"; x.needsReview = false; });
+    }
+    t.category = cat; t.catSource = "user"; t.needsReview = false;
+    await saveData();
+    toast("סווג: " + catLabel(cat, true));
+    fromReview ? renderReview() : returnTo();
+  }));
+}
+
+function renderReview() {
+  returnTo = () => renderReview();
+  const q = reviewQueue().sort((a, b) => b.date.localeCompare(a.date));
+  screen(`
+    ${topbar("ממתין לסיווג")}
+    <p class="lead" style="max-width:none">${q.length ? "עסקאות שלא ברור לאן לשייך. לחץ על עסקה כדי לסווג. אם יש הצעה, היא מסומנת בסימן שאלה." : "הכול מסווג ✓"}</p>
+    ${q.length ? `<div class="group">${q.map(txRow).join("")}</div>` : ""}`);
+  document.getElementById("back").addEventListener("click", renderHome);
+  document.querySelectorAll("[data-tx]").forEach(b => b.addEventListener("click", () => renderCategorize(b.dataset.tx, true)));
 }
 
 /* ========= קריאת קובצי Excel — במכשיר, בלי ספריות חיצוניות ========= */
@@ -739,9 +1122,7 @@ async function readSheet(buf) {
   const xml = t => new DOMParser().parseFromString(t, "application/xml");
   const ss = [];
   const sst = await z.text("xl/sharedStrings.xml");
-  if (sst) for (const si of xml(sst).getElementsByTagName("si")) {
-    ss.push([...si.getElementsByTagName("t")].map(t => t.textContent).join(""));
-  }
+  if (sst) for (const si of xml(sst).getElementsByTagName("si")) ss.push([...si.getElementsByTagName("t")].map(t => t.textContent).join(""));
   const fmts = {}, xfs = [];
   const st = await z.text("xl/styles.xml");
   if (st) {
@@ -751,8 +1132,7 @@ async function readSheet(buf) {
     if (cx) for (const x of cx.getElementsByTagName("xf")) xfs.push(fmts[x.getAttribute("numFmtId")] || "");
   }
   const names = z.names();
-  const sheet = names.includes("xl/worksheets/sheet1.xml") ? "xl/worksheets/sheet1.xml"
-    : names.find(n => /^xl\/worksheets\/[^/]+\.xml$/.test(n));
+  const sheet = names.includes("xl/worksheets/sheet1.xml") ? "xl/worksheets/sheet1.xml" : names.find(n => /^xl\/worksheets\/[^/]+\.xml$/.test(n));
   if (!sheet) throw new Error("no-sheet");
   const doc = xml(await z.text(sheet));
   const rows = [];
@@ -794,8 +1174,7 @@ function normType(raw, charge) {
   return "other";
 }
 
-/* פענוח קובץ ייצוא של כאל.
-   נשמרים רק: 4 ספרות אחרונות, סוג הכרטיס, מועד חיוב, סכומים ופרטי העסקאות.
+/* פענוח קובץ ייצוא של כאל. נשמרים רק: 4 ספרות אחרונות, סוג הכרטיס, מועד חיוב, סכומים ופרטי העסקאות.
    שורת הכותרת (עם מספר החשבון) ושם הגיליון לא נשמרים בשום מקום. */
 function parseCal(rows) {
   const textAt = i => rows[i] && rows[i][0] && typeof rows[i][0].v === "string" ? rows[i][0].v : "";
@@ -832,9 +1211,7 @@ function parseCal(rows) {
       merchant: String(cell(1) || "").trim(),
       amount: Number(cell(2)) || 0,
       currency: currencyOf(r[2] ? r[2].fmt : ""),
-      charge,
-      typeRaw,
-      type: normType(typeRaw, charge),
+      charge, typeRaw, type: normType(typeRaw, charge),
       branch: cell(5) ? String(cell(5)).trim() : "",
       notes,
       installment: inst ? { n: +inst[1], of: +inst[2] } : null,
@@ -843,37 +1220,35 @@ function parseCal(rows) {
     });
   }
   const sumCharge = round2(tx.filter(t => !t.pending && !t.immediate).reduce((a, t) => a + (t.charge || 0), 0));
-  return {
-    last4, product, chargeDate, total, immediateTotal, pendingTotal, tx, sumCharge,
-    verified: total != null && Math.abs(sumCharge - total) < 0.01
-  };
+  return { last4, product, chargeDate, total, immediateTotal, pendingTotal, tx, sumCharge,
+    verified: total != null && Math.abs(sumCharge - total) < 0.01 };
 }
 
 /* ========= נתונים (מוצפנים) ========= */
-let data = null;
-const emptyData = () => ({ v: 1, cards: [], statements: [], tx: [] });
+const emptyData = () => ({ v: 2, cards: [], statements: [], tx: [], rules: { merchant: {}, sector: {} } });
 async function loadData() {
   const box = await kvGet("data");
   data = box ? await decryptJSON(box) : emptyData();
+  if (!data.rules) {                      // שדרוג מגרסה 2
+    data.rules = { merchant: {}, sector: {} };
+    data.v = 2;
+    reclassifyAll();
+    await saveData();
+  }
 }
 async function saveData() { await kvSet("data", await encryptJSON(data)); }
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : b64(rand(12)));
 
 /* ========= מסך ייבוא ========= */
 function renderImport() {
-  let parsed = [];   // [{name, ok, err, res}]
-  app.innerHTML = `
-    <section class="screen">
-      <div class="topbar">
-        <h1>ייבוא מכאל</h1>
-        <button class="btn link" id="cancel" type="button">ביטול</button>
-      </div>
-      <p class="lead" style="max-width:none">באפליקציית כאל בחר "ייצוא לאקסל" לכל חודש. אפשר לבחור כמה קבצים יחד. הקבצים נקראים כאן במכשיר. מספר החשבון לא נשמר, ושום דבר לא נשלח החוצה.</p>
-      <label class="btn secondary" for="file">בחירת קבצים</label>
-      <input id="file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" multiple hidden>
-      <div id="preview" class="stack"></div>
-      <button class="btn" id="save" type="button" hidden>שמירה</button>
-    </section>`;
+  let parsed = [];
+  screen(`
+    ${topbar("ייבוא מכאל", "ביטול", "cancel")}
+    <p class="lead" style="max-width:none">באפליקציית כאל בחר "ייצוא לאקסל" לכל חודש. אפשר לבחור כמה קבצים יחד. הקבצים נקראים כאן במכשיר. מספר החשבון לא נשמר, ושום דבר לא נשלח החוצה.</p>
+    <label class="btn secondary" for="file">בחירת קבצים</label>
+    <input id="file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" multiple hidden>
+    <div id="preview" class="stack"></div>
+    <button class="btn" id="save" type="button" hidden>שמירה</button>`);
   document.getElementById("cancel").addEventListener("click", renderHome);
   const input = document.getElementById("file");
   const preview = document.getElementById("preview");
@@ -889,12 +1264,10 @@ function renderImport() {
       try { parsed.push({ name: f.name, ok: true, res: parseCal(await readSheet(await f.arrayBuffer())) }); }
       catch (e) {
         const msg = e.message === "no-decompress" ? "הדפדפן ישן מדי לקריאת קובצי אקסל. עדכן את iOS."
-          : e.message === "not-cal" ? "הקובץ לא נראה כמו ייצוא לאקסל של כאל."
-          : "לא הצלחתי לקרוא את הקובץ.";
+          : e.message === "not-cal" ? "הקובץ לא נראה כמו ייצוא לאקסל של כאל." : "לא הצלחתי לקרוא את הקובץ.";
         parsed.push({ name: f.name, ok: false, err: msg });
       }
     }
-    // קובץ כפול לאותו חיוב ואותו כרטיס: האחרון גובר
     const seen = new Map();
     parsed.filter(p => p.ok).forEach(p => seen.set(p.res.last4 + p.res.chargeDate, p));
     parsed = parsed.filter(p => !p.ok || seen.get(p.res.last4 + p.res.chargeDate) === p);
@@ -903,8 +1276,7 @@ function renderImport() {
   });
 
   function drawPreview() {
-    const newCards = [...new Set(parsed.filter(p => p.ok).map(p => p.res.last4))]
-      .filter(l4 => !data.cards.find(c => c.last4 === l4));
+    const newCards = [...new Set(parsed.filter(p => p.ok).map(p => p.res.last4))].filter(l4 => !data.cards.find(c => c.last4 === l4));
     preview.innerHTML = `
       ${newCards.map(l4 => {
         const prod = (parsed.find(p => p.ok && p.res.last4 === l4) || {}).res.product || "";
@@ -944,19 +1316,24 @@ function renderImport() {
         card = { id: uid(), issuer: "cal", last4: r.last4, product: r.product, nickname: (el && el.value.trim()) || "הכרטיס שלי" };
         data.cards.push(card);
       }
-      // כל קובץ הוא תמונת מצב מלאה של מחזור חיוב: מחליפים את הייבוא הקודם של אותו מחזור
       const old = data.statements.find(s => s.cardId === card.id && s.chargeDate === r.chargeDate);
+      const keepUser = new Map();   // סיווגים ידניים שורדים ייבוא חוזר של אותו מחזור
       if (old) {
+        data.tx.filter(t => t.statementId === old.id && t.catSource === "user")
+          .forEach(t => keepUser.set([t.date, t.merchant, t.amount, t.installment ? t.installment.n : ""].join("|"), t.category));
         data.tx = data.tx.filter(t => t.statementId !== old.id);
         data.statements = data.statements.filter(s => s !== old);
       }
-      const stmt = {
-        id: uid(), cardId: card.id, chargeDate: r.chargeDate, total: r.total,
-        immediateTotal: r.immediateTotal, pendingTotal: r.pendingTotal,
-        verified: r.verified, importedAt: new Date().toISOString()
-      };
+      const stmt = { id: uid(), cardId: card.id, chargeDate: r.chargeDate, total: r.total,
+        immediateTotal: r.immediateTotal, pendingTotal: r.pendingTotal, verified: r.verified, importedAt: new Date().toISOString() };
       data.statements.push(stmt);
-      r.tx.forEach(t => data.tx.push({ ...t, id: uid(), statementId: stmt.id, cardId: card.id, category: null }));
+      r.tx.forEach(t => {
+        const nt = { ...t, id: uid(), statementId: stmt.id, cardId: card.id, category: null, catSource: null, needsReview: false };
+        const k = [t.date, t.merchant, t.amount, t.installment ? t.installment.n : ""].join("|");
+        if (keepUser.has(k)) { nt.category = keepUser.get(k); nt.catSource = "user"; }
+        else { const c = classify(nt); nt.category = c.cat; nt.catSource = c.cat ? "auto" : null; nt.needsReview = !c.sure; }
+        data.tx.push(nt);
+      });
       if (!latest || stmt.chargeDate > latest.chargeDate) latest = stmt;
     }
     try {
@@ -964,7 +1341,8 @@ function renderImport() {
       selectedStatementId = latest ? latest.id : null;
       txFilter = "all";
       renderHome();
-      toast("הייבוא נשמר");
+      const q = reviewQueue().length;
+      toast(q ? `הייבוא נשמר · ${q} ממתינות לסיווג` : "הייבוא נשמר");
     } catch {
       saveBtn.disabled = false; saveBtn.textContent = "שמירה";
       toast("השמירה נכשלה. נסה שוב");
@@ -972,8 +1350,224 @@ function renderImport() {
   });
 }
 
+/* ========= הגדרות ========= */
+async function renderSettings() {
+  let persisted = null;
+  try { persisted = navigator.storage && navigator.storage.persisted ? await navigator.storage.persisted() : null; } catch {}
+  const vault = await getVault();
+  const faceOn = hasWrap(vault, "prf"), rkOn = hasWrap(vault, "recovery");
+  const faceAvail = await faceIdAvailable();
+  screen(`
+    ${topbar("הגדרות", "סיום")}
+
+    <div class="section-label">נעילה אוטומטית</div>
+    <div class="group">
+      <div class="seg" role="group" aria-label="נעילה אוטומטית">
+        ${AUTO_LOCK.map(a => `<button type="button" data-s="${a.s}" aria-pressed="${a.s === settings.autoLock}">${a.label}</button>`).join("")}
+      </div>
+    </div>
+
+    <div class="section-label">אבטחה</div>
+    <div class="group">
+      <div class="row"><button class="row-btn" id="faceBtn" type="button"><span>Face ID</span><span class="val">${faceOn ? "פעיל ‹" : faceAvail ? "הפעלה ‹" : "לא זמין"}</span></button></div>
+      <div class="row"><button class="row-btn" id="rkBtn" type="button"><span>מפתח שחזור</span><span class="val">${rkOn ? "נוצר ‹" : "יצירה ‹"}</span></button></div>
+      <div class="row"><button class="row-btn" id="changeCode" type="button"><span>שינוי קוד גישה</span><span class="val">‹</span></button></div>
+      <div class="row"><span>אחסון קבוע בדפדפן</span><span class="val">${persisted === true ? "מאושר" : persisted === false ? "לא מאושר" : "לא ידוע"}</span></div>
+    </div>
+    <p class="footnote">הנתונים מוצפנים ונשמרים במכשיר הזה בלבד. אם תשכח את הקוד, רק מפתח השחזור יכול לפתוח אותם.</p>
+
+    <div class="section-label">כרטיסים</div>
+    <div class="group">
+      ${data.cards.length ? data.cards.map(c => `
+        <div class="row">
+          <div><div>${esc(c.nickname)}</div><div class="val">כאל${c.product ? " · " + esc(c.product) : ""} · ••${esc(c.last4)}</div></div>
+          <button class="btn link" type="button" data-rename="${c.id}">שינוי שם</button>
+        </div>`).join("") : `<div class="row"><span class="val">עוד לא יובאו כרטיסים</span></div>`}
+    </div>
+
+    <div class="section-label">סיווג</div>
+    <div class="group">
+      <div class="row"><button class="row-btn" id="rulesBtn" type="button"><span>כללי סיווג</span><span class="val">‹</span></button></div>
+    </div>
+
+    <div class="section-label">גרסה</div>
+    <div class="group">
+      <div class="row"><span>גרסה מותקנת</span><span class="val" style="direction:ltr">${APP_VERSION}</span></div>
+      <div class="row"><button class="row-btn" id="checkUpdate" type="button"><span>בדיקת עדכונים</span><span class="val">‹</span></button></div>
+    </div>
+
+    <div class="section-label">מתקדם</div>
+    <div class="group">
+      <div class="row"><button class="row-btn" id="advBtn" type="button"><span>ניהול נתונים</span><span class="val">‹</span></button></div>
+    </div>`);
+  document.getElementById("back").addEventListener("click", renderHome);
+  document.querySelectorAll(".seg button").forEach(b => b.addEventListener("click", async () => {
+    settings.autoLock = Number(b.dataset.s);
+    await saveSettings();
+    document.querySelectorAll(".seg button").forEach(x => x.setAttribute("aria-pressed", x === b));
+    toast("נשמר");
+  }));
+  document.getElementById("changeCode").addEventListener("click", () => renderVerifyCode({
+    title: "הזן את הקוד הנוכחי", onCancel: renderSettings,
+    onOk: raw => renderNewCode(raw, { afterSave: async r => { r.fill(0); renderSettings(); toast("הקוד עודכן"); }, cancel: () => { raw.fill(0); renderSettings(); } })
+  }));
+  document.getElementById("faceBtn").addEventListener("click", () => faceOn ? renderFaceOn() : faceAvail ? renderFaceEnable() : toast("Face ID לא זמין בדפדפן הזה"));
+  document.getElementById("rkBtn").addEventListener("click", () => renderRecoveryIntro(rkOn));
+  document.getElementById("rulesBtn").addEventListener("click", renderRules);
+  document.getElementById("checkUpdate").addEventListener("click", () => checkForUpdate(true));
+  document.getElementById("advBtn").addEventListener("click", renderAdvanced);
+  document.querySelectorAll("[data-rename]").forEach(btn => btn.addEventListener("click", () => {
+    const card = data.cards.find(c => c.id === btn.dataset.rename);
+    const row = btn.closest(".row");
+    row.innerHTML = `<input class="field" type="text" maxlength="30" value="${esc(card.nickname)}" aria-label="שם הכרטיס"><button class="btn link" type="button">שמירה</button>`;
+    const field = row.querySelector("input");
+    field.focus(); field.select();
+    const commit = async () => { card.nickname = field.value.trim() || card.nickname; await saveData(); toast("השם עודכן"); renderSettings(); };
+    row.querySelector("button").addEventListener("click", commit);
+    field.addEventListener("keydown", e => { if (e.key === "Enter") commit(); });
+  }));
+}
+
+function renderFaceEnable() {
+  screen(`
+    ${topbar("Face ID")}
+    <div class="card col">
+      <h3>כניסה במבט אחד</h3>
+      <p>האייפון ייצור Passkey בשם "מעקב הוצאות" באפליקציית הסיסמאות. בכל כניסה Face ID יפתח את ההצפנה. קוד הגישה נשאר תמיד כגיבוי.</p>
+      <p class="note">קודם תתבקש להזין את קוד הגישה, ואז לאשר עם Face ID (אולי פעמיים).</p>
+    </div>
+    <div style="flex:1"></div>
+    <button class="btn" id="go" type="button">המשך</button>`);
+  document.getElementById("back").addEventListener("click", renderSettings);
+  document.getElementById("go").addEventListener("click", () => renderVerifyCode({
+    title: "הזן קוד גישה", onCancel: renderSettings,
+    onOk: raw => {
+      screen(`
+        ${topbar("Face ID")}
+        <div class="card col"><h3>מוכן</h3><p>לחץ על הכפתור כדי לאשר עם Face ID.</p></div>
+        <p class="err" id="faceErr" hidden></p>
+        <div style="flex:1"></div>
+        <button class="btn" id="create" type="button">הפעלת Face ID</button>`);
+      document.getElementById("back").addEventListener("click", () => { raw.fill(0); renderSettings(); });
+      document.getElementById("create").addEventListener("click", async () => {
+        const btn = document.getElementById("create"), err = document.getElementById("faceErr");
+        btn.disabled = true; btn.textContent = "ממתין ל-Face ID…"; err.hidden = true;
+        try {
+          await enableFaceId(raw);
+          raw.fill(0);
+          renderSettings(); toast("Face ID הופעל");
+        } catch (e) {
+          btn.disabled = false; btn.textContent = "נסה שוב";
+          err.textContent = e && e.message === "no-prf"
+            ? "הדפדפן או המכשיר לא תומכים בפתיחת הצפנה עם Face ID. הכניסה עם הקוד ממשיכה לעבוד."
+            : e && e.name === "NotAllowedError" ? "הפעולה בוטלה. אפשר לנסות שוב." : "ההפעלה נכשלה. אפשר לנסות שוב.";
+          err.hidden = false;
+        }
+      });
+    }
+  }));
+}
+
+function renderFaceOn() {
+  screen(`
+    ${topbar("Face ID")}
+    <div class="card col"><h3>Face ID פעיל</h3><p>במסך הנעילה לחץ על "Face ID" כדי להיכנס.</p></div>
+    <div style="flex:1"></div>
+    <button class="btn danger" id="off" type="button">כיבוי Face ID</button>
+    <p class="footnote">אחרי הכיבוי אפשר למחוק את ה-Passkey "מעקב הוצאות" גם מאפליקציית הסיסמאות.</p>`);
+  document.getElementById("back").addEventListener("click", renderSettings);
+  document.getElementById("off").addEventListener("click", async () => { await removeWrap("prf"); renderSettings(); toast("Face ID כובה"); });
+}
+
+function renderRecoveryIntro(exists) {
+  screen(`
+    ${topbar("מפתח שחזור")}
+    <div class="card col">
+      <h3>${exists ? "כבר יש מפתח שחזור" : "רשת ביטחון אם תשכח את הקוד"}</h3>
+      <p>מפתח השחזור הוא רצף של 28 תווים שפותח את הנתונים במקום הקוד. שמור אותו באפליקציית הסיסמאות של האייפון. כל מי שמחזיק בו יכול לפתוח את האפליקציה, אז אל תשלח אותו לאף אחד.</p>
+      ${exists ? `<p class="note">יצירת מפתח חדש מבטלת את הקודם.</p>` : ""}
+    </div>
+    <div style="flex:1"></div>
+    <button class="btn" id="go" type="button">${exists ? "יצירת מפתח חדש" : "יצירת מפתח"}</button>
+    ${exists ? `<button class="btn danger" id="del" type="button">ביטול מפתח השחזור</button>` : ""}`);
+  document.getElementById("back").addEventListener("click", renderSettings);
+  const del = document.getElementById("del");
+  if (del) del.addEventListener("click", () => renderVerifyCode({ title: "הזן קוד כדי לבטל", onCancel: renderSettings,
+    onOk: async raw => { raw.fill(0); await removeWrap("recovery"); renderSettings(); toast("מפתח השחזור בוטל"); } }));
+  document.getElementById("go").addEventListener("click", () => renderVerifyCode({
+    title: "הזן קוד גישה", onCancel: renderSettings,
+    onOk: async raw => {
+      const key = newRecoveryKey();
+      await storeRecovery(key, raw);
+      raw.fill(0);
+      screen(`
+        ${topbar("מפתח השחזור שלך", "סיום")}
+        <p class="lead" style="max-width:none">שמור אותו עכשיו. הוא לא יוצג שוב.</p>
+        <div class="rk mono" id="rkText">${key}</div>
+        <button class="btn secondary" id="copy" type="button">העתקה</button>
+        <div class="card col">
+          <h3>לשמירה באפליקציית הסיסמאות</h3>
+          <p>סיסמאות ← ➕ ← אתר: "מעקב הוצאות", שם משתמש: "מפתח שחזור", סיסמה: הדבק את המפתח.</p>
+        </div>`);
+      document.getElementById("back").addEventListener("click", renderSettings);
+      document.getElementById("copy").addEventListener("click", async () => {
+        try { await navigator.clipboard.writeText(key); toast("הועתק"); } catch { toast("סמן את המפתח והעתק ידנית"); }
+      });
+    }
+  }));
+}
+
+function renderRules() {
+  const sectors = [...new Set(data.tx.map(t => t.branch || "").filter(Boolean))].sort();
+  const mrules = Object.entries(data.rules.merchant).sort((a, b) => a[0].localeCompare(b[0], "he"));
+  const opts = sel => `<option value="" ${!sel ? "selected" : ""}>ממתין לסיווג</option>` +
+    ALL_SUBS.map(s => `<option value="${s.key}" ${sel === s.key ? "selected" : ""}>${esc(s.label)}</option>`).join("");
+  screen(`
+    ${topbar("כללי סיווג")}
+    <p class="lead" style="max-width:none">סדר העדיפויות: קודם סיווג ידני של עסקה, אחר כך כלל לבית העסק, ואז הענף של כאל.</p>
+    <div class="section-label">לפי ענף בכאל</div>
+    <div class="group">
+      ${sectors.length ? sectors.map(s => {
+        const cur = s in data.rules.sector ? data.rules.sector[s] : (DEFAULT_SECTOR[s] || "");
+        return `<div class="row"><label for="sec-${esc(s)}">${esc(s)}</label><select class="sel" id="sec-${esc(s)}" data-sector="${esc(s)}">${opts(cur)}</select></div>`;
+      }).join("") : `<div class="row"><span class="val">עוד אין עסקאות</span></div>`}
+    </div>
+    <div class="section-label">לפי בית עסק (נוצרים כשמסווגים עסקה)</div>
+    <div class="group">
+      ${mrules.length ? mrules.map(([k, v]) => `
+        <div class="row"><div><div>${esc(k)}</div><div class="val">${esc(catLabel(v, true))}</div></div>
+        <button class="btn link" type="button" data-delrule="${esc(k)}">הסרה</button></div>`).join("")
+        : `<div class="row"><span class="val">עוד אין כללים</span></div>`}
+    </div>`);
+  document.getElementById("back").addEventListener("click", renderSettings);
+  document.querySelectorAll("[data-sector]").forEach(s => s.addEventListener("change", async () => {
+    data.rules.sector[s.dataset.sector] = s.value;
+    reclassifyAll(); await saveData(); toast("עודכן");
+  }));
+  document.querySelectorAll("[data-delrule]").forEach(b => b.addEventListener("click", async () => {
+    delete data.rules.merchant[b.dataset.delrule];
+    reclassifyAll(); await saveData(); renderRules(); toast("הכלל הוסר");
+  }));
+}
+
+function renderAdvanced() {
+  screen(`
+    ${topbar("ניהול נתונים")}
+    <div class="card col">
+      <h3>מה שמור במכשיר</h3>
+      <p>${data.cards.length} כרטיסים · ${data.statements.length} חודשים · ${data.tx.length} עסקאות · ${Object.keys(data.rules.merchant).length} כללי סיווג</p>
+    </div>
+    <div style="flex:1"></div>
+    <button class="btn danger" id="wipe" type="button">מחיקת כל הנתונים…</button>
+    <p class="footnote">המחיקה דורשת קוד גישה ואישור נוסף.</p>`);
+  document.getElementById("back").addEventListener("click", renderSettings);
+  document.getElementById("wipe").addEventListener("click", () => renderVerifyCode({
+    title: "הזן קוד כדי להמשיך", onCancel: renderAdvanced,
+    onOk: raw => { raw.fill(0); renderWipeConfirm(renderAdvanced); }
+  }));
+}
+
 /* ========= עדכוני גרסה ========= */
-const APP_VERSION = "2.0.0";
 let lastUpdateCheck = 0;
 async function checkForUpdate(manual = false) {
   lastUpdateCheck = Date.now();
@@ -996,147 +1590,10 @@ async function applyUpdate() {
   location.reload();
 }
 
-/* ========= הגדרות ========= */
-async function renderSettings() {
-  let persisted = null;
-  try { persisted = navigator.storage && navigator.storage.persisted ? await navigator.storage.persisted() : null; } catch {}
-  app.innerHTML = `
-    <section class="screen">
-      <div class="topbar">
-        <h1>הגדרות</h1>
-        <button class="btn link" id="back" type="button">סיום</button>
-      </div>
-
-      <div class="section-label">נעילה אוטומטית</div>
-      <div class="group">
-        <div class="seg" role="group" aria-label="נעילה אוטומטית">
-          ${AUTO_LOCK.map(a => `<button type="button" data-s="${a.s}" aria-pressed="${a.s === settings.autoLock}">${a.label}</button>`).join("")}
-        </div>
-      </div>
-      <p class="footnote">כמה זמן מחוץ לאפליקציה עד שצריך להזין קוד שוב.</p>
-
-      <div class="section-label">אבטחה</div>
-      <div class="group">
-        <div class="row"><button class="row-btn" id="changeCode" type="button"><span>שינוי קוד גישה</span><span class="val">‹</span></button></div>
-        <div class="row"><span>אחסון קבוע בדפדפן</span><span class="val">${persisted === true ? "מאושר" : persisted === false ? "לא מאושר" : "לא ידוע"}</span></div>
-      </div>
-      <p class="footnote">הנתונים מוצפנים במפתח שנגזר מהקוד שלך ונשמרים בדפדפן במכשיר הזה בלבד. אם תשכח את הקוד אי אפשר לשחזר אותם.</p>
-
-      <div class="section-label">כרטיסים</div>
-      <div class="group">
-        ${data.cards.length ? data.cards.map(c => `
-          <div class="row">
-            <div><div>${esc(c.nickname)}</div><div class="val">כאל${c.product ? " · " + esc(c.product) : ""} · ••${esc(c.last4)}</div></div>
-            <button class="btn link" type="button" data-rename="${c.id}">שינוי שם</button>
-          </div>`).join("") : `<div class="row"><span class="val">עוד לא יובאו כרטיסים</span></div>`}
-      </div>
-
-      <div class="section-label">גרסה</div>
-      <div class="group">
-        <div class="row"><span>גרסה מותקנת</span><span class="val" style="direction:ltr">${APP_VERSION}</span></div>
-        <div class="row"><button class="row-btn" id="checkUpdate" type="button"><span>בדיקת עדכונים</span><span class="val">‹</span></button></div>
-      </div>
-
-      <div class="section-label">בדיקות</div>
-      <div class="group"><div class="row" style="display:block">
-        <button class="btn danger" id="wipe" type="button">מחיקת כל הנתונים והתחלה מחדש</button>
-      </div></div>
-    </section>`;
-  document.getElementById("back").addEventListener("click", renderHome);
-  document.querySelectorAll(".seg button").forEach(b => b.addEventListener("click", async () => {
-    settings.autoLock = Number(b.dataset.s);
-    await saveSettings();
-    document.querySelectorAll(".seg button").forEach(x => x.setAttribute("aria-pressed", x === b));
-    toast("נשמר");
-  }));
-  document.getElementById("changeCode").addEventListener("click", () => renderChangeCurrent());
-  document.getElementById("checkUpdate").addEventListener("click", () => checkForUpdate(true));
-  document.querySelectorAll("[data-rename]").forEach(btn => btn.addEventListener("click", () => {
-    const card = data.cards.find(c => c.id === btn.dataset.rename);
-    const row = btn.closest(".row");
-    row.innerHTML = `
-      <input class="field" type="text" maxlength="30" value="${esc(card.nickname)}" aria-label="שם הכרטיס">
-      <button class="btn link" type="button">שמירה</button>`;
-    const field = row.querySelector("input");
-    field.focus(); field.select();
-    const commit = async () => {
-      card.nickname = field.value.trim() || card.nickname;
-      await saveData();
-      toast("השם עודכן");
-      renderSettings();
-    };
-    row.querySelector("button").addEventListener("click", commit);
-    field.addEventListener("keydown", e => { if (e.key === "Enter") commit(); });
-  }));
-  const wipe = document.getElementById("wipe");
-  wipe.addEventListener("click", async () => {
-    if (!wipe.dataset.armed) {
-      wipe.dataset.armed = "1";
-      wipe.textContent = "לחץ שוב לאישור: הכול יימחק";
-      setTimeout(() => { if (wipe.isConnected) { delete wipe.dataset.armed; wipe.textContent = "מחיקת כל הנתונים והתחלה מחדש"; } }, 4000);
-      return;
-    }
-    await kvClear();
-    dek = null; settings = null; data = null; state = "setup";
-    renderWelcome();
-  });
-}
-
-/* ========= שינוי קוד ========= */
-function renderChangeCurrent(message = "", error = false) {
-  app.innerHTML = `<section class="screen center" id="host"></section>`;
-  mountPad(document.getElementById("host"), {
-    title: "הזן את הקוד הנוכחי", message, error,
-    extraKey: { label: "ביטול", onClick: renderSettings },
-    onComplete: async (code, pad) => {
-      const g = await getGuard();
-      if (g.lockedUntil > Date.now()) { pad.setMessage("יותר מדי ניסיונות. נסה שוב מאוחר יותר", true); return; }
-      pad.setBusy(true); pad.setMessage("בודק…");
-      const raw = await unwrapRaw(code);
-      pad.setBusy(false);
-      if (!raw) {
-        const failed = g.failed + 1, wait = delayFor(failed);
-        await setGuard({ failed, lockedUntil: wait ? Date.now() + wait : 0 });
-        pad.shake(); pad.setMessage("קוד שגוי", true);
-        return;
-      }
-      await setGuard({ failed: 0, lockedUntil: 0 });
-      renderChangeNew(raw);
-    }
-  });
-}
-function renderChangeNew(raw, message = "", error = false) {
-  app.innerHTML = `<section class="screen center" id="host"></section>`;
-  mountPad(document.getElementById("host"), {
-    title: "בחר קוד חדש", message, error,
-    extraKey: { label: "ביטול", onClick: () => { raw.fill(0); renderSettings(); } },
-    onComplete: (code, pad) => {
-      if (isTooSimple(code)) { pad.setMessage("הקוד פשוט מדי. בחר קוד אחר", true); pad.shake(); return; }
-      app.innerHTML = `<section class="screen center" id="host"></section>`;
-      mountPad(document.getElementById("host"), {
-        title: "הזן שוב את הקוד החדש",
-        extraKey: { label: "ביטול", onClick: () => { raw.fill(0); renderSettings(); } },
-        onComplete: async (again, pad2) => {
-          if (again !== code) { renderChangeNew(raw, "הקודים לא תואמים. נסה שוב", true); return; }
-          pad2.setBusy(true); pad2.setMessage("מצפין מחדש…");
-          try {
-            await wrapAndStore(again, raw);
-            raw.fill(0);
-            renderSettings();
-            toast("הקוד עודכן");
-          } catch {
-            pad2.setBusy(false); pad2.setMessage("השמירה נכשלה. נסה שוב", true);
-          }
-        }
-      });
-    }
-  });
-}
-
 /* ========= רקע וחזרה ========= */
 function onHidden() {
   if (state !== "unlocked") return;
-  cover.classList.add("show");           // מסתיר תוכן בתמונת מחליף האפליקציות
+  cover.classList.add("show");
   if (settings && settings.autoLock === 0) lock();
   else hiddenAt = hiddenAt || Date.now();
 }
@@ -1151,44 +1608,39 @@ window.addEventListener("pagehide", onHidden);
 window.addEventListener("pageshow", e => { if (e.persisted) onVisible(); });
 
 /* ========= הפעלה ========= */
-if ("serviceWorker" in navigator && location.protocol === "https:") {
-  navigator.serviceWorker.register("sw.js").catch(() => {});
-}
-
+if ("serviceWorker" in navigator && location.protocol === "https:") navigator.serviceWorker.register("sw.js").catch(() => {});
 document.getElementById("doUpdate").addEventListener("click", applyUpdate);
 
 (async function boot() {
   checkForUpdate();
   if (!window.crypto || !crypto.subtle) {
-    app.innerHTML = `<section class="screen center"><h1>הדפדפן לא נתמך</h1><p class="lead">צריך Safari או Chrome עדכני.</p></section>`;
+    screen(`<h1>הדפדפן לא נתמך</h1><p class="lead">צריך Safari או Chrome עדכני.</p>`, "center");
     return;
   }
-  try {
-    await pickBackend();
-  } catch {
-    app.innerHTML = `
-      <section class="screen center">
-        <h1>אין גישה לאחסון</h1>
-        <p class="lead">הדפדפן חוסם שמירת נתונים באתר הזה. בדרך כלל הסיבה היא אחת מאלה:</p>
-        <div class="group" style="text-align:right;width:100%">
-          <div class="row"><span>גלישה פרטית: פתח בחלון רגיל</span></div>
-          <div class="row"><span>הגדרות ← אפליקציות ← Safari ← "חסום את כל העוגיות": לכבות</span></div>
-          <div class="row"><span>מצב נעילה (Lockdown Mode) פעיל</span></div>
-        </div>
-        <button class="btn" id="retry" type="button">נסה שוב</button>
-        <p class="footnote" style="direction:ltr">${esc(lastStorageError)}</p>
-      </section>`;
+  try { await pickBackend(); }
+  catch {
+    screen(`
+      <h1>אין גישה לאחסון</h1>
+      <p class="lead">הדפדפן חוסם שמירת נתונים באתר הזה. בדרך כלל הסיבה היא אחת מאלה:</p>
+      <div class="group" style="text-align:right;width:100%">
+        <div class="row"><span>גלישה פרטית: פתח בחלון רגיל</span></div>
+        <div class="row"><span>הגדרות ← אפליקציות ← Safari ← "חסום את כל העוגיות": לכבות</span></div>
+        <div class="row"><span>מצב נעילה (Lockdown Mode) פעיל</span></div>
+      </div>
+      <button class="btn" id="retry" type="button">נסה שוב</button>
+      <p class="footnote" style="direction:ltr">${esc(lastStorageError)}</p>`, "center");
     document.getElementById("retry").addEventListener("click", () => location.reload());
     return;
   }
   try {
-    const vault = await kvGet("vault");
+    const vault = await getVault();
     if (vault) { state = "locked"; renderLock(); }
     else { state = "setup"; renderWelcome(); }
   } catch (e) {
-    app.innerHTML = `<section class="screen center"><h1>שגיאה בקריאת הנתונים</h1><p class="footnote" style="direction:ltr">${esc((e && (e.name + " " + e.message)) || e)}</p><button class="btn" type="button" onclick="location.reload()">נסה שוב</button></section>`;
+    screen(`<h1>שגיאה בקריאת הנתונים</h1><p class="footnote" style="direction:ltr">${esc((e && (e.name + " " + e.message)) || e)}</p><button class="btn" type="button" onclick="location.reload()">נסה שוב</button>`, "center");
   }
 })();
+
 </script>
 </body>
 </html>

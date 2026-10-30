@@ -1,6 +1,6 @@
 // Service worker: שומר את קבצי האפליקציה כדי שתיפתח גם בלי אינטרנט.
 // לא נוגע בנתונים — הם ב-IndexedDB, מוצפנים.
-const CACHE = "finance-tracker-v3";
+const CACHE = "finance-tracker-v4";
 const FILES = ["./", "./index.html", "./manifest.webmanifest", "./icon-180.png", "./icon-192.png", "./icon-512.png"];
 self.addEventListener("install", e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES))); self.skipWaiting(); });
 self.addEventListener("activate", e => {
