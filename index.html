@@ -459,7 +459,7 @@ details.fold[open] summary::before { transform: rotate(-90deg); }
 /* ============================================================
    מעקב הוצאות — אפליקציית ווב אישית. כל הנתונים במכשיר בלבד, מוצפנים.
    ============================================================ */
-const APP_VERSION = "5.0.0";
+const APP_VERSION = "5.1.0";
 
 /* ========= אחסון (במכשיר בלבד) =========
    ראשי: IndexedDB. גיבוי: localStorage (אם IndexedDB חסום בדפדפן).
@@ -1152,16 +1152,21 @@ function installmentPlans() {
 }
 
 /* ========= מצב כספי ========= */
-const fin = () => Object.assign({ portfolio: null, earmarks: [] }, data.finance || {});
+const WALLETS = [["bit", "ביט"], ["paybox", "פייבוקס"], ["cash", "מזומן"]];
+const fin = () => Object.assign({ portfolio: null, earmarks: [], bankManual: null, wallets: {}, salary: null }, data.finance || {});
 function moneyPicture() {
   const acc = (data.accounts || [])[0];
   const f = fin();
-  const bank = acc && acc.latestBalance != null ? acc.latestBalance : null;
+  // יתרת עו"ש: הערך העדכני מבין הייבוא האחרון לבין הזנה ידנית
+  let bank = acc && acc.latestBalance != null ? acc.latestBalance : null, bankDate = acc ? acc.latestDate : null, bankManual = false;
+  if (f.bankManual && (bank == null || !bankDate || f.bankManual.asOf >= bankDate)) { bank = f.bankManual.amount; bankDate = f.bankManual.asOf; bankManual = true; }
   const portfolio = f.portfolio ? f.portfolio.amount : null;
+  const wallets = WALLETS.map(([k, l]) => ({ k, l, amount: f.wallets[k] ? Number(f.wallets[k].amount) || 0 : null, asOf: f.wallets[k] ? f.wallets[k].asOf : null }));
+  const walletSum = wallets.reduce((a, w) => a + (w.amount || 0), 0);
   const owed = f.earmarks.reduce((a, e) => a + (Number(e.amount) || 0), 0);
-  const total = (bank || 0) + (portfolio || 0);
-  return { acc, bank, bankDate: acc ? acc.latestDate : null, portfolio, portfolioDate: f.portfolio ? f.portfolio.asOf : null,
-    earmarks: f.earmarks, owed, total, mine: total - owed };
+  const total = (bank || 0) + (portfolio || 0) + walletSum;
+  return { acc, bank, bankDate, bankManual, portfolio, portfolioDate: f.portfolio ? f.portfolio.asOf : null,
+    wallets, walletSum, salary: f.salary, earmarks: f.earmarks, owed, total, mine: total - owed };
 }
 
 /* ========= גיבוי מוצפן ========= */
@@ -1588,7 +1593,7 @@ function homeWithData(st) {
   const shown = homeAllCats ? ranked : ranked.slice(0, 3);
   const queue = reviewQueue().length;
   const m = moneyPicture();
-  const hasMoney = m.bank != null || m.portfolio != null;
+  const hasMoney = m.bank != null || m.portfolio != null || m.walletSum > 0;
   const pct = s => total > 0 ? Math.round(s / total * 100) : 0;
 
   return `
@@ -2140,6 +2145,8 @@ function instBody() {
 function renderFinance() {
   returnTo = () => renderFinance();
   const m = moneyPicture(), f = fin();
+  const dt = iso => iso ? new Date(iso + "T12:00:00").toLocaleDateString("he-IL") : "";
+  const num = (id, val, ph = "0") => `<input class="field small" id="${id}" type="text" inputmode="decimal" placeholder="${ph}" value="${val != null ? val : ""}">`;
   tabScreen("money", `
     <header class="pagehead"><h1>כסף</h1></header>
     <article class="hero">
@@ -2148,16 +2155,37 @@ function renderFinance() {
       <div class="hero-rows">
         <div><span>עו"ש${m.bankDate ? ` · ${ddmm(m.bankDate)}` : ""}</span><b>${m.bank != null ? fmtMoney(m.bank) : "—"}</b></div>
         <div><span>תיק ני"ע${m.portfolioDate ? ` · ${ddmm(m.portfolioDate)}` : ""}</span><b>${m.portfolio != null ? fmtMoney(m.portfolio) : "—"}</b></div>
+        ${m.walletSum ? `<div><span>ביט, פייבוקס ומזומן</span><b>${fmtMoney(m.walletSum)}</b></div>` : ""}
         ${m.owed ? `<div><span>לא שלי</span><b>−${fmtMoney(m.owed)}</b></div>` : ""}
       </div>
+      ${m.salary && m.salary.amount ? `<div class="hero-sub">משכורת חודשית ${fmtMoney(m.salary.amount)} · נכנסת ב-${m.salary.day} לחודש</div>` : ""}
     </article>
+
+    <div class="section-label">משכורת</div>
+    <div class="group">
+      <div class="row"><label for="salAmt">משכורת נטו לחודש</label>${num("salAmt", m.salary ? m.salary.amount : null)}</div>
+      <div class="row"><label for="salDay">יום כניסה בחודש</label>
+        <select class="sel" id="salDay">${Array.from({ length: 31 }, (_, i) => i + 1).map(d => `<option value="${d}" ${d === (m.salary ? m.salary.day : 9) ? "selected" : ""}>${d}</option>`).join("")}</select></div>
+    </div>
+    <p class="footnote">לתכנון קדימה. לא נספר בכסף שיש לך עכשיו.</p>
+
+    <div class="section-label">עו"ש</div>
+    <div class="group">
+      <div class="row"><label for="bankAmt">יתרה נוכחית</label>${num("bankAmt", m.bank)}</div>
+    </div>
+    <p class="footnote">${m.bankDate ? `${m.bankManual ? "הוזן ידנית" : "מקובץ דיסקונט"} ב-${dt(m.bankDate)}. ` : ""}מתעדכן לבד מכל ייבוא. אם תזין ידנית, יוצג הערך העדכני מביניהם.</p>
+
+    <div class="section-label">ארנקים ומזומן</div>
+    <div class="group">
+      ${m.wallets.map(w => `<div class="row"><label for="w-${w.k}">${w.l}</label>${num("w-" + w.k, w.amount)}</div>`).join("")}
+    </div>
+    <p class="footnote">יתרות בארנקי ביט ופייבוקס (לא בחשבון הבנק) ומזומן שיש לך ביד.</p>
 
     <div class="section-label">תיק ניירות ערך</div>
     <div class="group">
-      <div class="row"><label for="pf">שווי נוכחי</label>
-        <input class="field small" id="pf" type="text" inputmode="decimal" placeholder="0" value="${f.portfolio ? f.portfolio.amount : ""}"></div>
+      <div class="row"><label for="pf">שווי נוכחי</label>${num("pf", f.portfolio ? f.portfolio.amount : null)}</div>
     </div>
-    <p class="footnote">${f.portfolio && f.portfolio.asOf ? `עודכן ב-${new Date(f.portfolio.asOf + "T12:00:00").toLocaleDateString("he-IL")}. ` : ""}מעדכנים ידנית לפי אפליקציית הבנק. היתרה בעו"ש מתעדכנת לבד מכל ייבוא.</p>
+    <p class="footnote">${f.portfolio && f.portfolio.asOf ? `עודכן ב-${dt(f.portfolio.asOf)}. ` : ""}מעדכנים ידנית לפי אפליקציית הבנק.</p>
 
     <div class="section-label">כסף מיועד (לא שלי)</div>
     <div class="group" id="ems">
@@ -2171,12 +2199,19 @@ function renderFinance() {
     </div>
     <p class="footnote">כסף שנמצא אצלך אבל שייך למישהו אחר. הוא יורד מ"שלי בפועל".</p>
     <button class="btn" id="saveFin" type="button">שמירה</button>`);
+
+  const val = id => { const r = document.getElementById(id).value.trim(); return r === "" ? null : parseNum(r); };
+  const stamp = (prev, v) => v == null ? null : (prev && prev.amount === v ? prev : { amount: v, asOf: todayISO() });
   const collect = () => {
-    const ff = fin();
-    const pfRaw = document.getElementById("pf").value.trim();
-    const pfVal = pfRaw === "" ? null : parseNum(pfRaw);
-    if (pfVal == null) ff.portfolio = null;
-    else if (!ff.portfolio || ff.portfolio.amount !== pfVal) ff.portfolio = { amount: pfVal, asOf: todayISO() };
+    const ff = fin(), mm = moneyPicture();
+    ff.portfolio = stamp(ff.portfolio, val("pf"));
+    const b = val("bankAmt");
+    if (b == null) ff.bankManual = null;
+    else if (b !== mm.bank) ff.bankManual = { amount: b, asOf: todayISO() };
+    ff.wallets = Object.assign({}, ff.wallets);
+    WALLETS.forEach(([k]) => { const v = val("w-" + k); if (v == null) delete ff.wallets[k]; else ff.wallets[k] = stamp(ff.wallets[k], v); });
+    const sa = val("salAmt");
+    ff.salary = sa == null ? null : { amount: sa, day: Number(document.getElementById("salDay").value) };
     ff.earmarks = ff.earmarks.map(e => ({
       ...e,
       name: (document.querySelector(`[data-em-name="${e.id}"]`) || {}).value?.trim() || e.name,
@@ -2184,15 +2219,18 @@ function renderFinance() {
     }));
     data.finance = ff;
   };
+  const bad = () => ["pf", "bankAmt", "salAmt", ...WALLETS.map(w => "w-" + w[0])].some(id => { const v = val(id); return v != null && !isFinite(v); });
   document.getElementById("addEm").addEventListener("click", () => {
+    if (bad()) { toast("סכום לא תקין"); return; }
     collect(); data.finance.earmarks.push({ id: newId("e"), name: "כסף מיועד", amount: 0 }); renderFinance();
   });
   document.querySelectorAll("[data-em-del]").forEach(b => b.addEventListener("click", () => {
+    if (bad()) { toast("סכום לא תקין"); return; }
     collect(); data.finance.earmarks = data.finance.earmarks.filter(e => e.id !== b.dataset.emDel); renderFinance();
   }));
   document.getElementById("saveFin").addEventListener("click", async () => {
+    if (bad()) { toast("סכום לא תקין"); return; }
     collect();
-    if (data.finance.portfolio && !isFinite(data.finance.portfolio.amount)) { toast("סכום לא תקין"); return; }
     await saveData(); toast("נשמר"); renderFinance();
   });
 }
